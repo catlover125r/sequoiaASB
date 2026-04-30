@@ -49,13 +49,12 @@ nav {
 }
 
 .nav-logo-mark {
-  width: 38px; height: 38px;
-  background: var(--gold);
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', serif;
-  font-size: 1rem; font-weight: 900;
-  color: var(--midnight);
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: white;
+  padding: 2px;
+  flex-shrink: 0;
 }
 
 .nav-logo-text {
@@ -131,11 +130,12 @@ nav {
   background: var(--gold) !important;
   color: var(--midnight) !important;
   border-radius: 8px !important;
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   padding: 0.55rem 1.1rem !important;
   transition: background 0.2s, transform 0.15s !important;
+  letter-spacing: 0.02em !important;
 }
-.nav-cta:hover { background: var(--gold-light) !important; transform: translateY(-1px); }
+.nav-cta:hover { background: var(--gold-light) !important; transform: translateY(-1px); color: var(--midnight) !important; }
 
 .nav-hamburger {
   display: none; flex-direction: column; gap: 4px;
@@ -172,8 +172,8 @@ nav {
 
 .hero-eyebrow {
   display: inline-flex; align-items: center; gap: 0.6rem;
-  background: rgba(245,200,66,0.12);
-  border: 1px solid rgba(245,200,66,0.3);
+  background: rgba(107,33,168,0.25);
+  border: 1px solid rgba(107,33,168,0.5);
   border-radius: 100px;
   padding: 0.4rem 1rem;
   font-size: 0.78rem; font-weight: 700;
@@ -226,7 +226,7 @@ nav {
 
 .btn-primary {
   display: inline-flex; align-items: center; gap: 0.5rem;
-  background: var(--gold); color: var(--midnight);
+  background: var(--purple); color: white;
   font-family: 'Outfit', sans-serif;
   font-size: 0.95rem; font-weight: 700;
   text-decoration: none; border: none; cursor: pointer;
@@ -234,9 +234,9 @@ nav {
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 .btn-primary:hover {
-  background: var(--gold-light);
+  background: var(--purple-mid);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(245,200,66,0.35);
+  box-shadow: 0 8px 24px rgba(107,33,168,0.4);
 }
 
 .btn-outline {
@@ -276,7 +276,7 @@ nav {
 
 /* ─── QUICK LINKS RIBBON ─── */
 .ribbon {
-  background: var(--gold);
+  background: var(--purple);
   padding: 0;
   overflow: hidden;
 }
@@ -299,11 +299,11 @@ nav {
   display: inline-flex; align-items: center; gap: 0.75rem;
   font-size: 0.85rem; font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--midnight);
+  color: var(--gold);
   flex-shrink: 0;
 }
 
-.ribbon-dot { width: 6px; height: 6px; background: var(--midnight); border-radius: 50%; opacity: 0.4; }
+.ribbon-dot { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; opacity: 0.5; }
 
 /* ─── SECTION STYLES ─── */
 section { padding: clamp(4rem, 8vw, 7rem) clamp(1.5rem, 5vw, 4rem); }
