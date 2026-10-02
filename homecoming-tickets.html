@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sequoia ASB - Homecoming Tickets</title>
+<link rel="stylesheet" href="/styles.css">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<header class="topbar">
+<button class="burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidenav"><span></span><span></span><span></span></button>
+<a class="tb-title" href="/">Sequoia ASB</a>
+</header>
+<div class="scrim"></div>
+<aside class="side" id="sidenav">
+<a class="logo" href="/"><img src="/assets/f8a6c74a44.png" alt="Sequoia ASB home"></a>
+<a class="sitename" href="/">Sequoia ASB</a>
+<nav><ul><li><a href="/">Sequoia ASB</a></li><li><a href="/student-activities-calendar">Student Activities Calendar</a></li><li><a href="/student-senate">Student Senate</a></li><li><a href="/asbulletin">ASBulletin</a></li><li><a href="/special-events">Special Events</a></li><li><details><summary><a href="/sequoia-communities">Sequoia Communities</a></summary><ul><li><details><summary><a href="/sequoia-communities/graduation-classes">Graduation Classes</a></summary><ul><li><a href="/sequoia-communities/graduation-classes/class-of-2026">Class of 2026</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2027">Class of 2027</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2028">Class of 2028</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2029">Class of 2029</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2030">Class of 2030</a></li></ul></details></li><li><details><summary><a href="/sequoia-communities/student-organizations">Student Organizations</a></summary><ul><li><a href="/sequoia-communities/student-organizations/clubs">Clubs</a></li><li><details><summary><a href="/sequoia-communities/student-organizations/student-unions">Student Unions</a></summary><ul><li><a href="/sequoia-communities/student-organizations/student-unions/asian-student-union">Asian Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/black-student-union">Black Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/jewish-student-union">Jewish Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/latino-student-union">Latino Student Union</a></li></ul></details></li></ul></details></li></ul></details></li><li><a href="/student-store">Student Store</a></li><li><a href="/alumni">Alumni</a></li><li><a href="/future-ravens">Future Ravens</a></li><li><a href="/student-resources">Student Resources</a></li><li><details><summary><a href="/contact">Contact</a></summary><ul><li><a href="/contact/student-activities-center">Student Activities Center</a></li><li><a href="/contact/activities-director">Activities Director</a></li><li><a href="/contact/student-leaders">Student Leaders</a></li><li><a href="/contact/join-asb">Join ASB</a></li></ul></details></li></ul></nav>
+</aside>
+<div class="main">
+
+<h1 class="ptitle">Homecoming Tickets</h1><section class="sec "><div class="wrap"><div class="ticket"><p id="testbanner" class="testbanner" hidden><b>TEST MODE</b> - no real money is charged. Use card 4242 4242 4242 4242.</p><h2>Homecoming Dance Ticket</h2><p class="price">$40</p><p id="left" class="small"></p><label for="qty">Tickets</label><select id="qty"><option value="1">1</option><option value="2">2</option></select><p class="small">Total: <b id="total">$40</b></p><button id="buy" class="btn dark buy" type="button">Buy ticket</button><p id="msg" class="small err" role="alert"></p><p class="small">You will enter your name, student ID and grade on the secure Stripe checkout page. Your receipt is emailed to you. Tickets are non-transferable.</p></div></div></section><script>
+(function(){
+  var qty=document.getElementById('qty'),btn=document.getElementById('buy'),msg=document.getElementById('msg'),
+      left=document.getElementById('left'),test=document.getElementById('testbanner'),total=document.getElementById('total');
+  var price=4000;
+  function fmt(c){return '$'+(c/100).toFixed(2).replace(/\.00$/,'');}
+  function upd(){total.textContent=fmt(price*Number(qty.value));}
+  qty.addEventListener('change',upd);
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+    if(d.error)return;
+    price=d.priceCents;upd();
+    if(d.testMode)test.hidden=false;
+    if(d.remaining<=0){btn.disabled=true;btn.textContent='Sold out';left.textContent='Tickets are sold out.';}
+    else if(d.remaining<=100){left.textContent='Only '+d.remaining+' tickets left.';}
+  }).catch(function(){});
+  btn.addEventListener('click',function(){
+    btn.disabled=true;msg.textContent='';var t=btn.textContent;btn.textContent='Redirecting to checkout...';
+    fetch('/api/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quantity:Number(qty.value)})})
+      .then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});})
+      .then(function(x){
+        if(x.ok&&x.j.url){window.location=x.j.url;return;}
+        msg.textContent=x.j&&x.j.error==='sold_out'?'Sorry, not enough tickets are left.':'Something went wrong. Please try again.';
+        btn.disabled=false;btn.textContent=t;
+      }).catch(function(){msg.textContent='Network error. Please try again.';btn.disabled=false;btn.textContent=t;});
+  });
+})();
+</script>
+<footer class="foot">
+<div class="foot-in">
+<div class="contact">
+<p class="small">Contact Us!</p>
+<p class="dirs">Communications Directors:</p>
+<p class="small it">Celestine Nolf: <a href="mailto:823212@seq.org">823212@seq.org</a></p>
+<p class="small it">Helene Meschkat: <a href="mailto:821055@seq.org">821055@seq.org</a></p>
+<p class="small it sac"><a href="mailto:seq_activities@seq.org">seq_activities@seq.org</a></p>
+</div>
+<div class="social">
+<a href="https://www.youtube.com/@SequoiaHSASB/videos" aria-label="YouTube"><img src="/assets/youtube.png" alt="YouTube" width="44" height="44"></a>
+<a href="https://www.tiktok.com/@sequoia.high.school" aria-label="TikTok"><img src="/assets/tiktok.png" alt="TikTok" width="44" height="44"></a>
+<a href="https://www.instagram.com/sequoia.asb/" aria-label="Instagram"><img src="/assets/instagram.png" alt="Instagram" width="44" height="44"></a>
+</div>
+</div>
+</footer>
+</div>
+<script>
+(function(){var b=document.body,t=document.querySelector('.burger');
+function set(o){b.classList.toggle('menu-open',o);t.setAttribute('aria-expanded',o);t.setAttribute('aria-label',o?'Close menu':'Open menu');}
+t.addEventListener('click',function(){set(!b.classList.contains('menu-open'));});
+document.querySelector('.scrim').addEventListener('click',function(){set(false);});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')set(false);});})();
+</script>
+</body>
+</html>
