@@ -8,7 +8,12 @@
 
 </head>
 <body>
-<aside class="side">
+<header class="topbar">
+<button class="burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidenav"><span></span><span></span><span></span></button>
+<a class="tb-title" href="/">Sequoia ASB</a>
+</header>
+<div class="scrim"></div>
+<aside class="side" id="sidenav">
 <a class="logo" href="/"><img src="/assets/f8a6c74a44.png" alt="Sequoia ASB home"></a>
 <a class="sitename" href="/">Sequoia ASB</a>
 <nav><ul><li><a href="/">Sequoia ASB</a></li><li><a href="/student-activities-calendar" class="active">Student Activities Calendar</a></li><li><a href="/student-senate">Student Senate</a></li><li><a href="/asbulletin">ASBulletin</a></li><li><a href="/special-events">Special Events</a></li><li><details><summary><a href="/sequoia-communities">Sequoia Communities</a></summary><ul><li><details><summary><a href="/sequoia-communities/graduation-classes">Graduation Classes</a></summary><ul><li><a href="/sequoia-communities/graduation-classes/class-of-2026">Class of 2026</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2027">Class of 2027</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2028">Class of 2028</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2029">Class of 2029</a></li><li><a href="/sequoia-communities/graduation-classes/class-of-2030">Class of 2030</a></li></ul></details></li><li><details><summary><a href="/sequoia-communities/student-organizations">Student Organizations</a></summary><ul><li><a href="/sequoia-communities/student-organizations/clubs">Clubs</a></li><li><details><summary><a href="/sequoia-communities/student-organizations/student-unions">Student Unions</a></summary><ul><li><a href="/sequoia-communities/student-organizations/student-unions/asian-student-union">Asian Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/black-student-union">Black Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/jewish-student-union">Jewish Student Union</a></li><li><a href="/sequoia-communities/student-organizations/student-unions/latino-student-union">Latino Student Union</a></li></ul></details></li></ul></details></li></ul></details></li><li><a href="/student-store">Student Store</a></li><li><a href="/alumni">Alumni</a></li><li><a href="/future-ravens">Future Ravens</a></li><li><a href="/student-resources">Student Resources</a></li><li><details><summary><a href="/contact">Contact</a></summary><ul><li><a href="/contact/student-activities-center">Student Activities Center</a></li><li><a href="/contact/activities-director">Activities Director</a></li><li><a href="/contact/student-leaders">Student Leaders</a></li><li><a href="/contact/join-asb">Join ASB</a></li></ul></details></li></ul></nav>
@@ -33,5 +38,12 @@
 </div>
 </footer>
 </div>
+<script>
+(function(){var b=document.body,t=document.querySelector('.burger');
+function set(o){b.classList.toggle('menu-open',o);t.setAttribute('aria-expanded',o);t.setAttribute('aria-label',o?'Close menu':'Open menu');}
+t.addEventListener('click',function(){set(!b.classList.contains('menu-open'));});
+document.querySelector('.scrim').addEventListener('click',function(){set(false);});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')set(false);});})();
+</script>
 </body>
 </html>
