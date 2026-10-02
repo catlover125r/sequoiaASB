@@ -162,3 +162,14 @@ ul.plain li{margin:0 0 12px}
   .names,.clubs{columns:1}
   .four{grid-template-columns:repeat(2,1fr)}
 }
+
+/* homecoming ticket page */
+.ticket{max-width:420px;margin:0 auto 40px;padding:28px;border:1px solid #ddd;border-radius:6px;text-align:center}
+.ticket h2{margin:0 0 6px}
+.ticket .price{font-size:40px;font-weight:700;margin:0 0 6px;color:var(--purple)}
+.ticket label{display:block;margin:16px 0 6px;font-size:14px}
+.ticket select{font-size:16px;padding:8px 12px;min-width:90px}
+.ticket .buy{display:block;width:100%;margin:18px 0 8px;padding:14px;font-size:16px;border:0;cursor:pointer;border-radius:4px}
+.ticket .buy:disabled{opacity:.6;cursor:default}
+.testbanner{background:#fff3cd;border:1px solid #e0c36a;padding:8px 10px;font-size:13px;border-radius:4px}
+.err{color:#b00020;min-height:1em}
