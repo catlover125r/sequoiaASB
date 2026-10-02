@@ -114,18 +114,51 @@ ul.plain li{margin:0 0 12px}
 .social{display:flex;gap:18px;padding-top:10px}
 .social img{width:36px;height:36px;display:block}
 
-@media (max-width:900px){
-  .side{position:static;width:auto;padding:24px 0}
-  .main{margin-left:0}
-  .hero{height:70vh}
-  .banner{height:260px}
-  .vid-row,.mission-in{grid-template-columns:1fr}
-  .two,.three,.four{grid-template-columns:repeat(2,1fr)}
-  .collage{grid-template-columns:1fr}.collage figure:nth-child(3){grid-column:auto;grid-row:auto}
-  .names,.clubs{columns:2}
-  .btn{padding:6px 20px}
-}
-
 .hc23{display:grid;grid-template-columns:337px 520px;gap:28px;margin:30px 0;align-items:start}
 .hc23 .stk{display:grid;gap:20px}
 @media (max-width:900px){.hc23{grid-template-columns:1fr}}
+
+/* phone / tablet: hamburger + slide-in menu */
+.topbar,.scrim{display:none}
+@media (max-width:900px){
+  .topbar{display:flex;align-items:center;gap:6px;position:fixed;top:0;left:0;right:0;height:56px;background:var(--side);z-index:30;padding:0 8px}
+  .burger{width:44px;height:44px;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
+  .burger span{display:block;width:22px;height:2px;background:#fff;border-radius:1px;transition:transform .2s,opacity .2s}
+  body.menu-open .burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  body.menu-open .burger span:nth-child(2){opacity:0}
+  body.menu-open .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  .tb-title{color:#fff;text-decoration:none;font-size:20px}
+  .side{width:min(84vw,300px);z-index:40;transform:translateX(-100%);transition:transform .25s;padding-top:20px;box-shadow:none}
+  body.menu-open .side{transform:none;box-shadow:4px 0 20px rgba(0,0,0,.4)}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:35}
+  body.menu-open .scrim{display:block}
+  body.menu-open{overflow:hidden}
+  .main{margin-left:0;padding-top:56px}
+  .hero,.banner{height:auto;min-height:0;aspect-ratio:16/9;background-size:cover}
+  .hero.home{aspect-ratio:5/3}
+  .wrap,.foot-in{padding-left:18px;padding-right:18px}
+  .sec{padding-top:32px}
+  .big{font-size:24px}
+  h1.ptitle{font-size:26px;margin:28px 0 20px}
+  .vid-row,.mission-in{grid-template-columns:1fr}
+  .vid-row h2{font-size:22px}
+  .two,.three,.four{grid-template-columns:repeat(2,1fr);gap:12px}
+  .collage{grid-template-columns:1fr}.collage figure:nth-child(3){grid-column:auto;grid-row:auto}
+  .names,.clubs{columns:2}
+  .btnbar{padding:16px 18px}
+  .btnrow{gap:12px}
+  .btn{padding:10px 20px;min-width:0;flex:1 1 100%}
+  .btn.dark{flex:0 0 auto}
+  .mission{padding:20px 0}
+  .purple figure{max-width:100%}
+  .sheet iframe{height:320px}
+  .doc iframe{height:560px}
+  .foot{padding-top:40px}
+  .foot-in{flex-direction:column;gap:16px}
+  .social{padding-top:0}
+  .seal img{max-width:100%}
+}
+@media (max-width:480px){
+  .names,.clubs{columns:1}
+  .four{grid-template-columns:repeat(2,1fr)}
+}
