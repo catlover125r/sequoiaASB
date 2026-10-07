@@ -6,7 +6,16 @@
 //   checkin  POST  { id }            helper + admin
 //   uncheckin POST { id }            admin only: undo a check-in
 //   tickets  GET                      admin only
+//   sync     POST                     admin only: reload from the sheet + push pending changes now
+//   status   GET                      admin only: how the fast database / sheet sync is doing
 const H = require('../_hoco');
+
+let lastTick = 0;
+function housekeeping(store) {
+  if (!store.tick || Date.now() - lastTick < 15000) return;
+  lastTick = Date.now();
+  store.tick().catch((e) => console.error('hoco tick', e.message));
+}
 
 function send(res, code, body) {
   res.setHeader('Cache-Control', 'no-store');
@@ -61,6 +70,8 @@ module.exports = async (req, res) => {
       const store = H.getStore();
       if (!store) return send(res, 503, { error: 'not_connected' });
       const id = H.normId((req.body || {}).id);
+      housekeeping(store);
+      if (store.fast) return send(res, 200, id ? await store.lookup(id) : { found: false });
       const byId = await H.getRoster(store);
       const t = id ? byId.get(id) : null;
       return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn } : { found: false });
@@ -72,6 +83,8 @@ module.exports = async (req, res) => {
       if (!store) return send(res, 503, { error: 'not_connected' });
       const id = H.normId((req.body || {}).id);
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
+      housekeeping(store);
+      if (store.fast) return send(res, 200, await store.checkin(id, user.email));   // atomic, a few ms
       // Instant "no ticket": if our recent copy of the roster doesn't have this ID, don't bother the sheet.
       // (We never answer "already checked in" from the copy: the sheet decides that, so an undo is never missed.)
       if (H.rosterAgeMs() < 90 * 1000) {
@@ -99,8 +112,25 @@ module.exports = async (req, res) => {
       if (user.role !== 'admin') return send(res, 403, { error: 'admin_only' });
       const store = H.getStore();
       if (!store) return send(res, 503, { error: 'not_connected' });
+      if (store.fast) {
+        housekeeping(store);
+        const [tickets, st] = await Promise.all([store.list(), store.status()]);
+        return send(res, 200, { tickets, pending: st.pending });
+      }
       const byId = await H.getRoster(store);
       return send(res, 200, { tickets: Array.from(byId.values()) });
+    }
+
+    if (action === 'sync' || action === 'status') {
+      if (user.role !== 'admin') return send(res, 403, { error: 'admin_only' });
+      const store = H.getStore();
+      if (!store) return send(res, 503, { error: 'not_connected' });
+      if (!store.fast) return send(res, 200, { store: 'sheet', note: 'fast database not set up yet' });
+      if (action === 'sync') {
+        if (!isPost || req.headers['x-requested-with'] !== 'hoco') return send(res, 400, { error: 'bad_request' });
+        return send(res, 200, await store.sync());
+      }
+      return send(res, 200, await store.status());
     }
 
     return send(res, 404, { error: 'unknown_action' });

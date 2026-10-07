@@ -163,6 +163,7 @@ const appsScript = {
   checkin: (id, by) => appsScript.call({ action: 'checkin', id, by }),
   uncheckin: (id, by) => appsScript.call({ action: 'uncheckin', id, by }),
   helpers: async () => (await appsScript.call({ action: 'staff' })).helpers || [],
+  apply: (changes, events) => appsScript.call({ action: 'apply', changes, events }),
 };
 
 // Local development: tickets in a JSON file (HOCO_DEV_FILE).
@@ -170,6 +171,12 @@ const devStore = {
   read() { return JSON.parse(fs.readFileSync(process.env.HOCO_DEV_FILE, 'utf8')); },
   write(d) { fs.writeFileSync(process.env.HOCO_DEV_FILE, JSON.stringify(d, null, 2)); },
   async helpers() { return emailList('HOCO_DEV_STAFF'); },
+  async apply(changes) {
+    const d = devStore.read();
+    changes.forEach((c) => { const row = d.find((t) => t.id === c.id); if (!row) return; if (c.checked) { row.at = c.at; row.by = c.by; } else { delete row.at; delete row.by; } });
+    devStore.write(d);
+    return { applied: changes.length, missing: [] };
+  },
   async uncheckin(id, by) {
     const d = devStore.read();
     const rows = d.filter((t) => t.id === id);
@@ -193,9 +200,37 @@ const devStore = {
   },
 };
 
+let fastStore = null;
+function redisEnv() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url, token } : null;
+}
+function waitUntilSafe(p) {
+  try { require('@vercel/functions').waitUntil(p); } catch (e) { p.catch(() => {}); }   // outside Vercel: just let it run
+}
+// Which backend answers? (1) Redis + the sheet behind it: a few ms per check-in.
+// (2) The sheet alone via Apps Script: works, but ~3 s per check-in. (3) a local file, for development.
 function getStore() {
-  if (process.env.APPS_SCRIPT_URL && process.env.APPS_SCRIPT_SECRET) return appsScript;
-  if (process.env.HOCO_DEV === '1' && process.env.HOCO_DEV_FILE) return devStore;
+  const sheetOk = process.env.APPS_SCRIPT_URL && process.env.APPS_SCRIPT_SECRET;
+  const devOk = process.env.HOCO_DEV === '1' && process.env.HOCO_DEV_FILE;
+  if (devOk && process.env.HOCO_DEV_REDIS === '1') {
+    if (!fastStore) {
+      const { fakeRedis } = require('./_dev_fake_redis');
+      fastStore = require('./_hoco_redis').create(fakeRedis(Number(process.env.HOCO_DEV_REDIS_LATENCY || 0)), devStore, { waitUntil: waitUntilSafe });
+    }
+    return fastStore;
+  }
+  if (sheetOk && redisEnv()) {
+    if (!fastStore) {
+      const { Redis } = require('@upstash/redis');
+      const e = redisEnv();
+      fastStore = require('./_hoco_redis').create(new Redis({ url: e.url, token: e.token, automaticDeserialization: false }), appsScript, { waitUntil: waitUntilSafe });
+    }
+    return fastStore;
+  }
+  if (sheetOk) return appsScript;
+  if (devOk) return devStore;
   return null;
 }
 

@@ -3,6 +3,8 @@
   "private": true,
   "dependencies": {
     "stripe": "^23.0.0",
-    "google-auth-library": "^11.1.0"
+    "google-auth-library": "^11.1.0",
+    "@upstash/redis": "^1.39.0",
+    "@vercel/functions": "^3.9.0"
   }
 }
