@@ -30,8 +30,13 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .scan{position:relative;flex:0 0 31%;background:#000;overflow:hidden}
 .scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .reticle{position:absolute;left:50%;top:44%;width:74%;height:46%;transform:translate(-50%,-50%);border:2px dashed rgba(255,255,255,.85);border-radius:10px;pointer-events:none;box-shadow:0 0 0 999px rgba(0,0,0,.28)}
-.scanbtn{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:var(--purple);border-radius:99px;padding:10px 34px;font-size:17px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.5)}
-.scanbtn:disabled,.go:disabled{opacity:.6}
+.scanbtn{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);border-radius:99px;padding:9px 26px;font-size:15px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.5);white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:190px}
+.scanbtn.idle{background:rgba(0,0,0,.6);color:rgba(255,255,255,.85);font-weight:500}
+.scanbtn.chk{background:#555}
+.scanbtn.got{background:var(--purple);padding:7px 34px 8px;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 2px 14px rgba(0,0,0,.6)}
+.scanbtn .num{font-size:32px;font-weight:800;letter-spacing:3px;font-variant-numeric:tabular-nums}
+.scanbtn .tap{font-size:12px;font-weight:500;opacity:.85}
+.go:disabled{opacity:.6}
 #cammsg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:14px;opacity:.9}
 .manual{flex:1;display:flex;flex-direction:column;padding:8px 10px 10px;gap:8px;min-height:0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
 #iddisp{flex:none;text-align:center;font-size:30px;letter-spacing:3px;font-variant-numeric:tabular-nums;min-height:44px;line-height:44px;background:#1d1d22;border-radius:10px}
@@ -91,7 +96,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     <video id="vid" playsinline muted autoplay></video>
     <div class="reticle"></div>
     <div id="cammsg">Camera not available. Use the keypad below.</div>
-    <button class="scanbtn" id="scanBtn">Check in</button>
+    <button class="scanbtn idle" id="scanBtn" disabled>Point at the barcode</button>
   </div>
   <div class="manual">
     <div id="iddisp" class="ph">Student ID</div>
@@ -199,10 +204,16 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     $('#popS').textContent = sub || '';
     if (navigator.vibrate) navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]);
   }
-  $('#pop').onclick = function () { if (Date.now() - popAt > 350) this.style.display = 'none'; };
+  var lastId = null;
+  $('#pop').onclick = function () {
+    if (Date.now() - popAt <= 350) return;
+    this.style.display = 'none';
+    if (lastId && window.holdOff) window.holdOff(lastId, 2000);   // the same barcode is usually still in front of the camera
+  };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   function checkIn(raw) {
+    lastId = String(raw).replace(/\D/g, '');
     return api('checkin', { id: raw }).then(function (r) {
       if (r.status === 401) { signedOut('Please sign in again.'); return; }
       if (r.status !== 200) { pop('bad', 'Something went wrong', r.body.error === 'not_connected' ? 'The ticket list is not connected yet.' : 'Please try again.'); return; }
@@ -230,72 +241,108 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   });
   $('#goBtn').onclick = function () {
     if (!digits || busy) return;
-    busy = true; var b = $('#goBtn'); b.disabled = true;
-    checkIn(digits).then(function () { busy = false; b.disabled = false; });
+    busy = true; var b = $('#goBtn'); b.disabled = true; paintPill();
+    checkIn(digits).then(function () { busy = false; b.disabled = false; paintPill(); });
   };
 
-  /* ----------------------------------------------------------- camera */
+  /* ------------------------------------------------- camera + live scanning */
+  // The camera is read continuously in the background. As soon as a barcode is recognized its number
+  // replaces the button; tapping the number checks that student in (no waiting to scan after the tap).
   var stream = null, vid = $('#vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
-  function startCam() {
-    if (stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { if (!stream) $('#cammsg').style.display = 'flex'; return; }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
-      .then(function (s) { stream = s; vid.srcObject = s; $('#cammsg').style.display = 'none'; vid.play().catch(function () {}); })
-      .catch(function () { $('#cammsg').style.display = 'flex'; });
+  var pill = $('#scanBtn'), held = null, heldAt = 0, suppress = { id: null, until: 0 };
+  var looping = false, inflight = false, frameNo = 0;
+
+  function popupOpen() { return $('#pop').style.display === 'flex'; }
+  function paintPill() {
+    if (busy) { pill.className = 'scanbtn chk'; pill.textContent = 'Checking\u2026'; pill.disabled = true; return; }
+    if (held) { pill.className = 'scanbtn got'; pill.innerHTML = '<span class="num">' + held + '</span><span class="tap">tap to check in</span>'; pill.disabled = false; return; }
+    pill.className = 'scanbtn idle'; pill.textContent = vid.srcObject ? 'Point at the barcode' : 'Camera off - use the keypad'; pill.disabled = true;
   }
-  function stopCam() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; vid.srcObject = null; } }
+
+  function startCam() {
+    startLoop();   // idles until the camera picture exists
+    if (stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { if (!stream) { $('#cammsg').style.display = 'flex'; paintPill(); } return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
+      .then(function (s) { stream = s; vid.srcObject = s; $('#cammsg').style.display = 'none'; vid.play().catch(function () {}); paintPill(); startLoop(); })
+      .catch(function () { $('#cammsg').style.display = 'flex'; paintPill(); });
+  }
+  function stopCam() {
+    stopLoop(); held = null;
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; vid.srcObject = null; }
+    paintPill();
+  }
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) stopCam(); else if (me && mode === 'helper') startCam();
   });
 
   var native = null;
-  try { if ('BarcodeDetector' in window) native = new BarcodeDetector({ formats: ['code_128', 'qr_code', 'code_39', 'ean_13'] }); } catch (e) {}
-  // Library decoder (zxing-cpp compiled to WebAssembly). iPhone Safari has no built-in detector,
-  // and this one is far more forgiving of blur and bar-width distortion than the older JS port.
+  try { if ('BarcodeDetector' in window) native = new BarcodeDetector({ formats: ['code_128', 'qr_code'] }); } catch (e) {}
+  // Library decoder (zxing-cpp compiled to WebAssembly) for iPhone Safari, which has no built-in detector.
   ZXingWASM.setZXingModuleOverrides({ locateFile: function (p) { return p.endsWith('.wasm') ? '/vendor/zxing_reader.wasm' : p; } });
-  var zxOpts = { formats: ['Code128', 'QRCode', 'Code39', 'EAN13'], tryHarder: true, tryRotate: true, tryInvert: true, maxNumberOfSymbols: 1 };
+  var zxOpts = { formats: ['Code128', 'QRCode'], tryHarder: true, tryRotate: true, tryInvert: true, maxNumberOfSymbols: 1 };
   function decodeZX(canvas) {
     var data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
     return ZXingWASM.readBarcodes(data, zxOpts).then(function (r) { return r.length && r[0].text ? r[0].text : null; }, function () { return null; });
   }
-  function decodeCanvas(canvas) {
-    if (native) {
-      return native.detect(canvas).then(function (r) { return r.length ? r[0].rawValue : decodeZX(canvas); }, function () { return decodeZX(canvas); });
+  function decodeCanvas(canvas, both) {
+    if (native) {   // built-in detector (Android Chrome): quick; on the whole-picture passes also ask the library
+      return native.detect(canvas).then(function (r) { return r.length ? r[0].rawValue : (both ? decodeZX(canvas) : null); }, function () { return decodeZX(canvas); });
     }
     return decodeZX(canvas);
   }
-  window.hocoDecode = decodeCanvas;   // used by our own tests
-  window.hocoDecodeZX = decodeZX;     // library path only (what iPhone Safari uses)
-  (function () { var w = document.createElement('canvas'); w.width = w.height = 8; decodeZX(w); })();   // warm up: downloads the wasm now, not at the first scan
+  window.hocoDecode = function (c) { return decodeCanvas(c, true); };   // used by our own tests
+  window.hocoDecodeZX = function (c) { return decodeZX(c); };           // library path only (what iPhone Safari uses)
+  (function () { var w = document.createElement('canvas'); w.width = w.height = 8; decodeZX(w); })();   // warm up: downloads the wasm now
 
-  function grab() {
-    if (!vid.videoWidth) return null;
-    var w = Math.min(1280, vid.videoWidth), h = Math.round(vid.videoHeight * w / vid.videoWidth);
+  // Only the part of the camera picture inside the dashed box (plus a margin) is analysed, scaled down:
+  // far fewer pixels to search, so each pass takes a fraction of the time.
+  function cropFrame() {
+    var vw = vid.videoWidth, vh = vid.videoHeight, ew = vid.clientWidth, eh = vid.clientHeight;
+    if (!vw || !ew) return null;
+    var sc = Math.max(ew / vw, eh / vh), ox = (ew - vw * sc) / 2, oy = (eh - vh * sc) / 2;
+    var sx = Math.max(0, (0.04 * ew - ox) / sc), sy = Math.max(0, (0.06 * eh - oy) / sc);
+    var sw = Math.min(vw - sx, 0.92 * ew / sc), sh = Math.min(vh - sy, 0.76 * eh / sc);
+    if (!(sw > 20 && sh > 20)) return null;
+    var w = Math.min(1280, Math.round(sw)), h = Math.round(sh * w / sw);
+    cv.width = w; cv.height = h; cx.drawImage(vid, sx, sy, sw, sh, 0, 0, w, h);
+    return cv;
+  }
+  function fullFrame() {
+    var vw = vid.videoWidth, vh = vid.videoHeight; if (!vw) return null;
+    var w = Math.min(1280, vw), h = Math.round(vh * w / vw);
     cv.width = w; cv.height = h; cx.drawImage(vid, 0, 0, w, h);
     return cv;
   }
-  // keep trying fresh frames for a couple of seconds so the helper only has to tap once
-  function readBarcode(ms) {
-    var end = Date.now() + ms;
-    return new Promise(function (resolve) {
-      (function tick() {
-        var c = grab();
-        var p = c ? decodeCanvas(c) : Promise.resolve(null);
-        p.then(function (txt) {
-          if (txt) return resolve(txt);
-          if (Date.now() > end) return resolve(null);
-          setTimeout(tick, 90);
-        });
-      })();
-    });
+  function digitsOf(txt) { var d = String(txt).replace(/\D/g, ''); return d.length >= 3 && d.length <= 12 ? d : null; }
+
+  function startLoop() { if (looping) return; looping = true; setTimeout(tick, 0); }
+  function stopLoop() { looping = false; }
+  function next(ms) { setTimeout(tick, ms); }
+  function tick() {
+    if (!looping) return;
+    if (inflight || busy || popupOpen() || document.hidden || !vid.videoWidth) { next(80); return; }
+    inflight = true; frameNo++;
+    var heavy = frameNo % 3 === 0;               // every 3rd pass: look at the whole picture, not just the dashed box
+    var c = heavy ? fullFrame() : cropFrame();
+    if (!c) { inflight = false; next(80); return; }
+    decodeCanvas(c, heavy).then(function (txt) {
+      inflight = false;
+      var id = txt ? digitsOf(txt) : null, now = Date.now();
+      if (id && !(suppress.id === id && now < suppress.until)) {
+        if (id !== held) { held = id; paintPill(); if (navigator.vibrate) navigator.vibrate(15); }
+        heldAt = now;
+      } else if (held && now - heldAt > 1500) { held = null; paintPill(); }   // barcode left the picture
+      next(id ? 150 : 0);
+    }, function () { inflight = false; next(100); });
   }
-  $('#scanBtn').onclick = function () {
-    if (busy) return;
-    busy = true; var b = $('#scanBtn'); b.disabled = true; b.textContent = 'Scanning…';
-    function done() { busy = false; b.disabled = false; b.textContent = 'Check in'; }
-    if (!vid.srcObject) { pop('bad', 'Camera is off', 'Use the keypad below.'); return done(); }
-    readBarcode(2600).then(function (txt) {
-      if (!txt) { pop('bad', "Couldn't read the barcode", 'Center it in the box and try again, or use the keypad.'); return done(); }
-      return checkIn(txt).then(done);
+
+  window.holdOff = function (id, ms) { suppress = { id: id, until: Date.now() + ms }; if (held === id) { held = null; paintPill(); } };
+  pill.onclick = function () {
+    if (!held || busy) return;
+    var id = held; busy = true; paintPill();
+    checkIn(id).then(function () {
+      busy = false; held = null; suppress = { id: id, until: Date.now() + 2500 };   // don't instantly re-grab the same code
+      paintPill();
     });
   };
 

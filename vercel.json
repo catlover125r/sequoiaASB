@@ -1,6 +1,9 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "regions": [
+    "sfo1"
+  ],
   "headers": [
     {
       "source": "/hocotickets",
