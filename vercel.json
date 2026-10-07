@@ -4,6 +4,11 @@
   "regions": [
     "sfo1"
   ],
+  "functions": {
+    "api/hoco/*.js": {
+      "maxDuration": 30
+    }
+  },
   "headers": [
     {
       "source": "/hocotickets",

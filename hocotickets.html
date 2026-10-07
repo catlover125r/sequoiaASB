@@ -110,7 +110,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 
 <!-- admin: search + list -->
 <div id="admin" class="view">
-  <div class="bar"><h1 id="count">Tickets</h1><button class="pill" id="toHelper">Check-in mode</button><button class="pill" id="out2">Sign out</button></div>
+  <div class="bar"><h1 id="count">Tickets</h1><button class="pill" id="syncBtn" hidden>Sync</button><button class="pill" id="toHelper">Check-in mode</button><button class="pill" id="out2">Sign out</button></div>
   <div class="search"><input id="q" type="search" placeholder="Search name or student ID" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
   <div id="list"></div>
   <div id="dlg"><div class="box"><p id="dlgT"></p><div class="btns"><button id="dlgNo" class="pill">Cancel</button><button id="dlgYes" class="pill danger">Undo check-in</button></div></div></div>
@@ -376,11 +376,12 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     return last + '\u0000' + first;
   }
   function shown(t) { return t.last ? t.last + ', ' + (t.first || '') : t.name; }   // "Last, First", like the sheet
-  var loadErr = false;
+  var loadErr = false, pending = null;
   function render() {
     var q = $('#q').value.trim().toLowerCase();
     var inCount = tickets.filter(function (t) { return t.checkedIn; }).length;
-    $('#count').innerHTML = tickets.length ? inCount + ' / ' + tickets.length + ' <span class="lg">checked </span>in' : 'Tickets';
+    $('#count').innerHTML = tickets.length ? inCount + ' / ' + tickets.length + ' <span class="lg">checked </span>in' + (pending ? ' <span class="lg">\u00b7 ' + pending + ' syncing</span>' : '') : 'Tickets';
+    $('#syncBtn').hidden = pending === null;
     var rows = tickets.filter(function (t) {
       return !q || String(t.name).toLowerCase().indexOf(q) >= 0 || shown(t).toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0;
     });
@@ -400,7 +401,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       if (r.status === 401) return signedOut('Please sign in again.');
       if (r.status === 503) { loadedOnce = true; tickets = []; loadErr = false; $('#list').innerHTML = '<div id="adminmsg">The ticket sheet is not connected yet.</div>'; return again(10000); }
       if (r.status === 200 && r.body && r.body.tickets) {
-        loadedOnce = true; loadErr = false;
+        loadedOnce = true; loadErr = false; pending = typeof r.body.pending === 'number' ? r.body.pending : null;
         tickets = r.body.tickets.slice().sort(function (a, b) { var x = sortKey(a), y = sortKey(b); return x < y ? -1 : x > y ? 1 : 0; });
         render(); return again(10000);
       }
@@ -408,6 +409,10 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     }).catch(function () { loadErr = true; render(); again(5000); });
   }
   $('#q').addEventListener('input', render);
+  $('#syncBtn').onclick = function () {
+    var b = this; b.disabled = true; b.textContent = 'Syncing\u2026';
+    api('sync', {}).then(function () { b.disabled = false; b.textContent = 'Sync'; loadTickets(); }, function () { b.disabled = false; b.textContent = 'Sync'; });
+  };
   // tap a green (checked-in) row to undo it
   var undoId = null;
   $('#list').addEventListener('click', function (e) {
