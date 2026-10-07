@@ -56,13 +56,30 @@ module.exports = async (req, res) => {
     const user = await H.currentUser(req);
     if (!user) return send(res, 401, { error: 'signed_out' });
 
+    if (action === 'lookup') {
+      if (!isPost || req.headers['x-requested-with'] !== 'hoco') return send(res, 400, { error: 'bad_request' });
+      const store = H.getStore();
+      if (!store) return send(res, 503, { error: 'not_connected' });
+      const id = H.normId((req.body || {}).id);
+      const byId = await H.getRoster(store);
+      const t = id ? byId.get(id) : null;
+      return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn } : { found: false });
+    }
+
     if (action === 'checkin') {
       if (!isPost || req.headers['x-requested-with'] !== 'hoco') return send(res, 400, { error: 'bad_request' });
       const store = H.getStore();
       if (!store) return send(res, 503, { error: 'not_connected' });
       const id = H.normId((req.body || {}).id);
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
+      // Instant "no ticket": if our recent copy of the roster doesn't have this ID, don't bother the sheet.
+      // (We never answer "already checked in" from the copy: the sheet decides that, so an undo is never missed.)
+      if (H.rosterAgeMs() < 90 * 1000) {
+        try { const byId = await H.getRoster(store); if (!byId.has(id)) return send(res, 200, { result: 'no_ticket' }); } catch (e) { /* fall through to the sheet */ }
+      }
       const r = await store.checkin(id, user.email);
+      if (r.result === 'ok') H.rosterApply(id, { checkedIn: true, at: new Date().toISOString() });
+      else if (r.result === 'already') H.rosterApply(id, { checkedIn: true, at: r.at || null });
       return send(res, 200, r);
     }
 
@@ -73,15 +90,17 @@ module.exports = async (req, res) => {
       if (!store) return send(res, 503, { error: 'not_connected' });
       const id = H.normId((req.body || {}).id);
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
-      return send(res, 200, await store.uncheckin(id, user.email));
+      const r = await store.uncheckin(id, user.email);
+      if (r.result === 'ok') H.rosterApply(id, { checkedIn: false, at: null });
+      return send(res, 200, r);
     }
 
     if (action === 'tickets') {
       if (user.role !== 'admin') return send(res, 403, { error: 'admin_only' });
       const store = H.getStore();
       if (!store) return send(res, 503, { error: 'not_connected' });
-      const tickets = await store.list();
-      return send(res, 200, { tickets });
+      const byId = await H.getRoster(store);
+      return send(res, 200, { tickets: Array.from(byId.values()) });
     }
 
     return send(res, 404, { error: 'unknown_action' });
