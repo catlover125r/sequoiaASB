@@ -4,6 +4,7 @@
 //   me       GET   who am I / what role
 //   logout   POST
 //   checkin  POST  { id }            helper + admin
+//   uncheckin POST { id }            admin only: undo a check-in
 //   tickets  GET                      admin only
 const H = require('../_hoco');
 
@@ -63,6 +64,16 @@ module.exports = async (req, res) => {
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
       const r = await store.checkin(id, user.email);
       return send(res, 200, r);
+    }
+
+    if (action === 'uncheckin') {
+      if (user.role !== 'admin') return send(res, 403, { error: 'admin_only' });
+      if (!isPost || req.headers['x-requested-with'] !== 'hoco') return send(res, 400, { error: 'bad_request' });
+      const store = H.getStore();
+      if (!store) return send(res, 503, { error: 'not_connected' });
+      const id = H.normId((req.body || {}).id);
+      if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
+      return send(res, 200, await store.uncheckin(id, user.email));
     }
 
     if (action === 'tickets') {
