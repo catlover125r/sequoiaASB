@@ -33,6 +33,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .scanbtn{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);border-radius:99px;padding:9px 26px;font-size:15px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.5);white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:190px}
 .scanbtn.idle{background:rgba(0,0,0,.6);color:rgba(255,255,255,.85);font-weight:500}
 .scanbtn.chk{background:#555}
+.scanbtn.got.bad{background:#b02a2a}
 .scanbtn.got{background:var(--purple);padding:7px 34px 8px;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 2px 14px rgba(0,0,0,.6)}
 .scanbtn .num{font-size:32px;font-weight:800;letter-spacing:3px;font-variant-numeric:tabular-nums}
 .scanbtn .tap{font-size:12px;font-weight:500;opacity:.85}
@@ -68,7 +69,9 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .row.in:active{filter:brightness(.95)}
 .hint{font-size:13px;color:#777;margin:6px 2px 10px}
 .row small{font-size:13px;opacity:.65;white-space:nowrap}
-.row span{overflow:hidden;text-overflow:ellipsis}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm .id{margin-left:10px}
+#loaderr{margin:0 0 10px;padding:9px 12px;background:#fff3cd;border:1px solid #e0c36a;border-radius:8px;font-size:14px;color:#6b5400}
 #adminmsg{padding:30px 16px;text-align:center;color:#666}
 #dlg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:24px}
 #dlg .box{background:#fff;color:#1b1b1f;border-radius:14px;padding:22px 20px 16px;max-width:360px;width:100%;text-align:center}
@@ -249,13 +252,19 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   // The camera is read continuously in the background. As soon as a barcode is recognized its number
   // replaces the button; tapping the number checks that student in (no waiting to scan after the tap).
   var stream = null, vid = $('#vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
-  var pill = $('#scanBtn'), held = null, heldAt = 0, suppress = { id: null, until: 0 };
+  var pill = $('#scanBtn'), held = null, heldInfo = null, heldAt = 0, suppress = { id: null, until: 0 };
+  var lookups = {};
   var looping = false, inflight = false, frameNo = 0;
 
   function popupOpen() { return $('#pop').style.display === 'flex'; }
   function paintPill() {
     if (busy) { pill.className = 'scanbtn chk'; pill.textContent = 'Checking\u2026'; pill.disabled = true; return; }
-    if (held) { pill.className = 'scanbtn got'; pill.innerHTML = '<span class="num">' + held + '</span><span class="tap">tap to check in</span>'; pill.disabled = false; return; }
+    if (held) {
+      var cls = 'scanbtn got', sub = 'tap to check in';
+      if (heldInfo && heldInfo.found === false) { cls += ' bad'; sub = 'No ticket'; }
+      else if (heldInfo && heldInfo.found) { sub = esc(heldInfo.name) + (heldInfo.checkedIn ? ' · already in' : ' · tap to check in'); if (heldInfo.checkedIn) cls += ' bad'; }
+      pill.className = cls; pill.innerHTML = '<span class="num">' + held + '</span><span class="tap">' + sub + '</span>'; pill.disabled = false; return;
+    }
     pill.className = 'scanbtn idle'; pill.textContent = vid.srcObject ? 'Point at the barcode' : 'Camera off - use the keypad'; pill.disabled = true;
   }
 
@@ -315,6 +324,17 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   }
   function digitsOf(txt) { var d = String(txt).replace(/\D/g, ''); return d.length >= 3 && d.length <= 12 ? d : null; }
 
+  // Ask the server (answered from its in-memory roster, a few milliseconds) who this ID is, so the helper
+  // sees the name or "No ticket" before tapping. Not authoritative: the tap still asks the sheet.
+  function preview(id) {
+    var c = lookups[id];
+    if (c && Date.now() - c.t < 15000) { heldInfo = c.info; paintPill(); return; }
+    api('lookup', { id: id }).then(function (r) {
+      var info = r.status === 200 ? r.body : null;
+      lookups[id] = { t: Date.now(), info: info };
+      if (held === id) { heldInfo = info; paintPill(); }
+    }, function () {});
+  }
   function startLoop() { if (looping) return; looping = true; setTimeout(tick, 0); }
   function stopLoop() { looping = false; }
   function next(ms) { setTimeout(tick, ms); }
@@ -329,19 +349,19 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       inflight = false;
       var id = txt ? digitsOf(txt) : null, now = Date.now();
       if (id && !(suppress.id === id && now < suppress.until)) {
-        if (id !== held) { held = id; paintPill(); if (navigator.vibrate) navigator.vibrate(15); }
+        if (id !== held) { held = id; heldInfo = null; paintPill(); preview(id); if (navigator.vibrate) navigator.vibrate(15); }
         heldAt = now;
-      } else if (held && now - heldAt > 1500) { held = null; paintPill(); }   // barcode left the picture
+      } else if (held && now - heldAt > 1500) { held = null; heldInfo = null; paintPill(); }   // barcode left the picture
       next(id ? 150 : 0);
     }, function () { inflight = false; next(100); });
   }
 
-  window.holdOff = function (id, ms) { suppress = { id: id, until: Date.now() + ms }; if (held === id) { held = null; paintPill(); } };
+  window.holdOff = function (id, ms) { suppress = { id: id, until: Date.now() + ms }; delete lookups[id]; if (held === id) { held = null; heldInfo = null; paintPill(); } };
   pill.onclick = function () {
     if (!held || busy) return;
     var id = held; busy = true; paintPill();
     checkIn(id).then(function () {
-      busy = false; held = null; suppress = { id: id, until: Date.now() + 2500 };   // don't instantly re-grab the same code
+      busy = false; held = null; heldInfo = null; delete lookups[id]; suppress = { id: id, until: Date.now() + 2500 };   // don't instantly re-grab the same code
       paintPill();
     });
   };
@@ -351,29 +371,41 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   function fmtTime(iso) {
     try { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
   }
+  function sortKey(t) {
+    var last = (t.last || String(t.name).split(' ').slice(-1)[0] || '').toLowerCase(), first = (t.first || t.name || '').toLowerCase();
+    return last + '\u0000' + first;
+  }
+  function shown(t) { return t.last ? t.last + ', ' + (t.first || '') : t.name; }   // "Last, First", like the sheet
+  var loadErr = false;
   function render() {
     var q = $('#q').value.trim().toLowerCase();
     var inCount = tickets.filter(function (t) { return t.checkedIn; }).length;
     $('#count').innerHTML = tickets.length ? inCount + ' / ' + tickets.length + ' <span class="lg">checked </span>in' : 'Tickets';
-    var rows = tickets.filter(function (t) { return !q || t.name.toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0; });
-    var l = $('#list');
-    if (!rows.length) { l.innerHTML = '<div id="adminmsg">' + (tickets.length ? 'No matches.' : (loadedOnce ? 'No tickets yet.' : 'Loading…')) + '</div>'; return; }
-    l.innerHTML = '<div class="hint">Tap a green name to undo that check-in.</div>' + rows.map(function (t) {
-      return '<div class="row' + (t.checkedIn ? ' in' : '') + '" data-id="' + esc(t.id) + '" data-name="' + esc(t.name) + '" data-in="' + (t.checkedIn ? '1' : '') + '"><span>' + esc(t.name) + '</span><small>' + esc(t.id) + (t.checkedIn && t.at ? ' · ' + esc(fmtTime(t.at)) : '') + '</small></div>';
+    var rows = tickets.filter(function (t) {
+      return !q || String(t.name).toLowerCase().indexOf(q) >= 0 || shown(t).toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0;
+    });
+    var l = $('#list'), note = loadErr && tickets.length ? '<div id="loaderr">Couldn\'t refresh just now. Showing the last list; retrying…</div>' : '';
+    if (!rows.length) {
+      l.innerHTML = note + '<div id="adminmsg">' + (tickets.length ? 'No matches.' : (loadErr ? 'Couldn\'t reach the ticket sheet. Retrying…' : (loadedOnce ? 'No tickets yet.' : 'Loading…'))) + '</div>';
+      return;
+    }
+    l.innerHTML = note + '<div class="hint">' + (q ? rows.length + ' match' + (rows.length === 1 ? '' : 'es') + '. ' : 'Everyone with a ticket, A to Z by last name. ') + 'Tap a green name to undo that check-in.</div>' + rows.map(function (t) {
+      return '<div class="row' + (t.checkedIn ? ' in' : '') + '" data-id="' + esc(t.id) + '" data-name="' + esc(t.name) + '" data-in="' + (t.checkedIn ? '1' : '') + '"><span class="nm">' + esc(shown(t)) + '<small class="id">' + esc(t.id) + '</small></span>' + (t.checkedIn && t.at ? '<small>' + esc(fmtTime(t.at)) + '</small>' : '') + '</div>';
     }).join('');
   }
   function loadTickets() {
     clearTimeout(timer);
+    var again = function (ms) { if (mode === 'admin' && me) timer = setTimeout(loadTickets, ms); };
     api('tickets').then(function (r) {
       if (r.status === 401) return signedOut('Please sign in again.');
-      if (r.status === 503) { loadedOnce = true; tickets = []; $('#list').innerHTML = '<div id="adminmsg">The ticket sheet is not connected yet.</div>'; }
-      else if (r.status === 200) {
-        loadedOnce = true;
-        tickets = r.body.tickets.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-        render();
+      if (r.status === 503) { loadedOnce = true; tickets = []; loadErr = false; $('#list').innerHTML = '<div id="adminmsg">The ticket sheet is not connected yet.</div>'; return again(10000); }
+      if (r.status === 200 && r.body && r.body.tickets) {
+        loadedOnce = true; loadErr = false;
+        tickets = r.body.tickets.slice().sort(function (a, b) { var x = sortKey(a), y = sortKey(b); return x < y ? -1 : x > y ? 1 : 0; });
+        render(); return again(10000);
       }
-      if (mode === 'admin' && me) timer = setTimeout(loadTickets, 10000);
-    }).catch(function () { if (mode === 'admin' && me) timer = setTimeout(loadTickets, 10000); });
+      loadErr = true; render(); again(5000);      // the sheet is slow or erroring: keep what we have and try again soon
+    }).catch(function () { loadErr = true; render(); again(5000); });
   }
   $('#q').addEventListener('input', render);
   // tap a green (checked-in) row to undo it

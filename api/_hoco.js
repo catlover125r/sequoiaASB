@@ -112,6 +112,33 @@ function devLoginAllowed(req) {
   return process.env.HOCO_DEV === '1' && isLocal(req);
 }
 
+// ------------------------------------------------------------ roster cache
+// Everyone with a ticket, loaded from the sheet once and refreshed every ~20 seconds. Lookups
+// ("does this ID have a ticket? already in?") are answered from memory in milliseconds instead of
+// asking the sheet (about 2 seconds). Writes still go to the sheet, which stays the source of truth.
+const ROSTER_TTL_MS = 20 * 1000;
+let roster = { at: 0, byId: null, inflight: null };
+async function getRoster(store) {
+  if (roster.byId && Date.now() - roster.at < ROSTER_TTL_MS) return roster.byId;
+  if (!roster.inflight) {
+    roster.inflight = store.list().then((list) => {
+      const m = new Map();
+      list.forEach((t) => m.set(t.id, t));
+      roster = { at: Date.now(), byId: m, inflight: null };
+      return m;
+    }).catch((e) => { roster.inflight = null; throw e; });
+  }
+  roster.inflight.catch(() => {});       // nobody may be waiting on this refresh; never let it become an unhandled error
+  if (roster.byId) return roster.byId;   // serve the slightly older copy while the new one loads
+  return roster.inflight;
+}
+function rosterAgeMs() { return roster.byId ? Date.now() - roster.at : Infinity; }
+// keep our copy in step with a check-in / undo we just did, without waiting for the next refresh
+function rosterApply(id, patch) {
+  if (roster.byId && roster.byId.has(id)) Object.assign(roster.byId.get(id), patch);
+}
+function resetRoster() { roster = { at: 0, byId: null, inflight: null }; }
+
 // ---------------------------------------------------------- ticket store
 function normId(v) {
   return String(v == null ? '' : v).replace(/\D/g, '');
@@ -153,7 +180,7 @@ const devStore = {
     devStore.write(d);
     return { result: 'ok', name: done.name };
   },
-  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, checkedIn: !!t.at, at: t.at || null })); },
+  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, first: t.first || '', last: t.last || '', checkedIn: !!t.at, at: t.at || null })); },
   async checkin(id, by) {
     const d = devStore.read();
     const rows = d.filter((t) => t.id === id);
@@ -172,4 +199,4 @@ function getStore() {
   return null;
 }
 
-module.exports = { roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal, resetHelperCache };
+module.exports = { getRoster, rosterAgeMs, rosterApply, resetRoster, roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal, resetHelperCache };
