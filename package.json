@@ -2,6 +2,7 @@
   "name": "sequoiaasb",
   "private": true,
   "dependencies": {
-    "stripe": "^23.0.0"
+    "stripe": "^23.0.0",
+    "google-auth-library": "^11.1.0"
   }
 }
