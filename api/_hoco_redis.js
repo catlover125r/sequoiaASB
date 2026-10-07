@@ -9,12 +9,6 @@
 //
 // Files starting with "_" in /api are not exposed as routes by Vercel.
 
-const R_ROSTER = 'hoco:roster';     // hash  id -> {"name","first","last"}   everyone with a ticket
-const R_CI = 'hoco:ci';             // hash  id -> {"at","by"}               checked-in students
-const R_DIRTY = 'hoco:dirty';       // set   ids whose state changed since the last push to the sheet
-const R_EVENTS = 'hoco:events';     // list  audit lines waiting to be pushed to the "Check-in Log" tab
-const R_META = 'hoco:meta';         // hash  rosterAt, rosterSize, pullError, pushAt, pushError
-
 const PULL_EVERY_MS = 60 * 1000;
 const PUSH_MIN_GAP_MS = 4 * 1000;
 const PUSH_DELAY_MS = 4500;
@@ -27,13 +21,24 @@ const parse = (s) => (s == null ? null : typeof s === 'string' ? JSON.parse(s) :
  * sheet : { list(), apply(changes, events), helpers() }   (the Google Apps Script adapter)
  * hooks : { waitUntil(promise) }   keeps background work alive after the response is sent
  */
-function create(redis, sheet, hooks) {
+function create(redis, sheet, hooks, opts) {
+  const P = (opts && opts.prefix) || 'hoco:';   // tests use their own prefix so they never touch real data
+  const R_ROSTER = P + 'roster', R_CI = P + 'ci', R_DIRTY = P + 'dirty', R_EVENTS = P + 'events', R_META = P + 'meta';
   const bg = (p) => {
     const safe = p.catch((e) => console.error('hoco background task failed:', e && e.message));
     try { hooks.waitUntil(safe); } catch (e) { /* no waitUntil (local dev): it just runs */ }
   };
-  const lock = async (name, ttlSec) => (await redis.set('hoco:lock:' + name, '1', { nx: true, ex: ttlSec })) === 'OK';
-  const unlock = (name) => redis.del('hoco:lock:' + name);
+  // With automaticDeserialization:false the real client returns HGETALL as a flat [k, v, k, v...] array.
+  const hgetall = async (key) => {
+    const v = await redis.hgetall(key);
+    if (!v) return {};
+    if (!Array.isArray(v)) return v;
+    const o = {};
+    for (let i = 0; i + 1 < v.length; i += 2) o[v[i]] = v[i + 1];
+    return o;
+  };
+  const lock = async (name, ttlSec) => (await redis.set(P + 'lock:' + name, '1', { nx: true, ex: ttlSec })) === 'OK';
+  const unlock = (name) => redis.del(P + 'lock:' + name);
 
   // ---------------------------------------------------------------- PULL: sheet -> Redis
   async function pull() {
@@ -49,7 +54,7 @@ function create(redis, sheet, hooks) {
       await redis.rename(tmp, R_ROSTER);          // swap the whole roster in one step
       // Check-ins that are already in the sheet but not here (e.g. the very first load). We skip students with
       // changes still waiting to be pushed, otherwise an undo would be "undone" by the older sheet copy.
-      const pushing = await redis.exists('hoco:lock:push');
+      const pushing = await redis.exists(P + 'lock:push');
       if (!pushing) {
         const dirty = new Set(await redis.smembers(R_DIRTY));
         const todo = list.filter((t) => t.checkedIn && !dirty.has(t.id));
@@ -102,7 +107,7 @@ function create(redis, sheet, hooks) {
 
   // ---------------------------------------------------------------- housekeeping (runs on admin polls)
   async function tick() {
-    const meta = (await redis.hgetall(R_META)) || {};
+    const meta = await hgetall(R_META);
     const rosterAt = Number(meta.rosterAt || 0), pushAt = Number(meta.pushAt || 0);
     if (!rosterAt || Date.now() - rosterAt > PULL_EVERY_MS) bg(pull());
     if (Date.now() - pushAt > PUSH_MIN_GAP_MS && (await redis.scard(R_DIRTY)) > 0) bg(flush());
@@ -166,7 +171,7 @@ function create(redis, sheet, hooks) {
 
   async function list() {
     await ensureRoster();
-    const [roster, ci] = await Promise.all([redis.hgetall(R_ROSTER), redis.hgetall(R_CI)]);
+    const [roster, ci] = await Promise.all([hgetall(R_ROSTER), hgetall(R_CI)]);
     const out = [];
     for (const id of Object.keys(roster || {})) {
       const r = parse(roster[id]), c = ci && ci[id] ? parse(ci[id]) : null;
@@ -177,7 +182,7 @@ function create(redis, sheet, hooks) {
 
   async function status() {
     const [roster, ci, dirty, events, meta] = await Promise.all([
-      redis.hlen(R_ROSTER), redis.hlen(R_CI), redis.scard(R_DIRTY), redis.llen(R_EVENTS), redis.hgetall(R_META),
+      redis.hlen(R_ROSTER), redis.hlen(R_CI), redis.scard(R_DIRTY), redis.llen(R_EVENTS), hgetall(R_META),
     ]);
     return { store: 'redis', tickets: roster, checkedIn: ci, pending: dirty, pendingLog: events, meta: meta || {} };
   }
