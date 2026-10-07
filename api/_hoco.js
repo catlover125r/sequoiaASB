@@ -13,10 +13,32 @@ const SESSION_HOURS = 12;
 function emailList(name) {
   return (process.env[name] || '').split(/[,\s;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
-function roleFor(email) {
-  const e = String(email || '').toLowerCase();
+// Helpers can ALSO be listed on the "Staff" tab of the ticket sheet (column A). We cache that list
+// for a short time so a new helper works within about a minute and a removed one is locked out
+// just as fast, without a redeploy. Admins are never read from the sheet.
+const HELPER_TTL_MS = 45 * 1000;
+let helperCache = { at: 0, list: [] };
+async function sheetHelpers() {
+  const store = getStore();
+  if (!store || !store.helpers) return [];
+  if (Date.now() - helperCache.at < HELPER_TTL_MS) return helperCache.list;
+  try {
+    const list = await store.helpers();
+    helperCache = { at: Date.now(), list: list.map((e) => String(e).trim().toLowerCase()).filter(Boolean) };
+  } catch (err) {
+    console.error('staff list error', err.message);
+    helperCache = { at: Date.now() - HELPER_TTL_MS + 10000, list: helperCache.list };   // keep the last list, retry in 10s
+  }
+  return helperCache.list;
+}
+function resetHelperCache() { helperCache = { at: 0, list: [] }; }
+
+async function roleFor(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
   if (emailList('ADMIN_EMAILS').includes(e)) return 'admin';
   if (emailList('HELPER_EMAILS').includes(e)) return 'helper';
+  if ((await sheetHelpers()).includes(e)) return 'helper';
   return null;
 }
 
@@ -65,10 +87,10 @@ function clearSession(res) {
 }
 // The role is looked up on every request, so removing someone from the allowlist
 // locks them out immediately, even if their cookie is still valid.
-function currentUser(req) {
+async function currentUser(req) {
   const p = verifyToken(cookies(req)[COOKIE]);
   if (!p) return null;
-  const role = roleFor(p.email);
+  const role = await roleFor(p.email);
   return role ? { email: p.email, role } : null;
 }
 
@@ -112,12 +134,14 @@ const appsScript = {
   },
   list: async () => (await appsScript.call({ action: 'list' })).tickets,
   checkin: (id, by) => appsScript.call({ action: 'checkin', id, by }),
+  helpers: async () => (await appsScript.call({ action: 'staff' })).helpers || [],
 };
 
 // Local development: tickets in a JSON file (HOCO_DEV_FILE).
 const devStore = {
   read() { return JSON.parse(fs.readFileSync(process.env.HOCO_DEV_FILE, 'utf8')); },
   write(d) { fs.writeFileSync(process.env.HOCO_DEV_FILE, JSON.stringify(d, null, 2)); },
+  async helpers() { return emailList('HOCO_DEV_STAFF'); },
   async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, checkedIn: !!t.at, at: t.at || null })); },
   async checkin(id, by) {
     const d = devStore.read();
@@ -137,4 +161,4 @@ function getStore() {
   return null;
 }
 
-module.exports = { roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal };
+module.exports = { roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal, resetHelperCache };
