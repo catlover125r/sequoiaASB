@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     }
 
     if (action === 'me') {
-      const u = H.currentUser(req);
+      const u = await H.currentUser(req);
       return u ? send(res, 200, u) : send(res, 401, { error: 'signed_out' });
     }
 
@@ -45,14 +45,14 @@ module.exports = async (req, res) => {
         try { email = await H.verifyGoogle(String(body.credential || '')); }
         catch { return send(res, 401, { error: 'bad_credential' }); }
       }
-      const role = H.roleFor(email);
+      const role = await H.roleFor(email);
       if (!role) return send(res, 403, { error: 'not_authorized' });   // same answer for any non-listed account
       H.setSession(req, res, email);
       return send(res, 200, { email, role });
     }
 
     // ---- everything else needs a signed-in staff member
-    const user = H.currentUser(req);
+    const user = await H.currentUser(req);
     if (!user) return send(res, 401, { error: 'signed_out' });
 
     if (action === 'checkin') {
