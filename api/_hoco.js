@@ -134,6 +134,7 @@ const appsScript = {
   },
   list: async () => (await appsScript.call({ action: 'list' })).tickets,
   checkin: (id, by) => appsScript.call({ action: 'checkin', id, by }),
+  uncheckin: (id, by) => appsScript.call({ action: 'uncheckin', id, by }),
   helpers: async () => (await appsScript.call({ action: 'staff' })).helpers || [],
 };
 
@@ -142,6 +143,16 @@ const devStore = {
   read() { return JSON.parse(fs.readFileSync(process.env.HOCO_DEV_FILE, 'utf8')); },
   write(d) { fs.writeFileSync(process.env.HOCO_DEV_FILE, JSON.stringify(d, null, 2)); },
   async helpers() { return emailList('HOCO_DEV_STAFF'); },
+  async uncheckin(id, by) {
+    const d = devStore.read();
+    const rows = d.filter((t) => t.id === id);
+    if (!rows.length) return { result: 'no_ticket' };
+    const done = rows.find((t) => t.at);
+    if (!done) return { result: 'not_checked_in', name: rows[0].name };
+    delete done.at; delete done.by;
+    devStore.write(d);
+    return { result: 'ok', name: done.name };
+  },
   async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, checkedIn: !!t.at, at: t.at || null })); },
   async checkin(id, by) {
     const d = devStore.read();

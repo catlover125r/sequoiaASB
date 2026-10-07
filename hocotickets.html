@@ -59,10 +59,18 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .search input:focus{border-color:var(--purple)}
 #list{flex:1;overflow-y:auto;padding:10px 12px 24px;-webkit-overflow-scrolling:touch}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-radius:10px;margin-bottom:7px;background:var(--grey);font-size:18px}
-.row.in{background:var(--green)}
+.row.in{background:var(--green);cursor:pointer}
+.row.in:active{filter:brightness(.95)}
+.hint{font-size:13px;color:#777;margin:6px 2px 10px}
 .row small{font-size:13px;opacity:.65;white-space:nowrap}
 .row span{overflow:hidden;text-overflow:ellipsis}
 #adminmsg{padding:30px 16px;text-align:center;color:#666}
+#dlg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:24px}
+#dlg .box{background:#fff;color:#1b1b1f;border-radius:14px;padding:22px 20px 16px;max-width:360px;width:100%;text-align:center}
+#dlg p{font-size:18px;margin:0 0 18px;line-height:1.35}
+#dlg .btns{display:flex;gap:10px;justify-content:center}
+#dlg .pill{background:#e6e6ea;color:#1b1b1f;padding:11px 18px;font-size:16px}
+#dlg .pill.danger{background:#d63838;color:#fff}
 @media (max-width:400px){.lg{display:none}}
 </style>
 </head>
@@ -97,6 +105,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   <div class="bar"><h1 id="count">Tickets</h1><button class="pill" id="toHelper">Check-in mode</button><button class="pill" id="out2">Sign out</button></div>
   <div class="search"><input id="q" type="search" placeholder="Search name or student ID" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
   <div id="list"></div>
+  <div id="dlg"><div class="box"><p id="dlgT"></p><div class="btns"><button id="dlgNo" class="pill">Cancel</button><button id="dlgYes" class="pill danger">Undo check-in</button></div></div></div>
 </div>
 
 <div id="pop"><div><div class="t" id="popT"></div><div class="s" id="popS"></div></div><div class="tap">Tap anywhere to continue</div></div>
@@ -302,8 +311,8 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     var rows = tickets.filter(function (t) { return !q || t.name.toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0; });
     var l = $('#list');
     if (!rows.length) { l.innerHTML = '<div id="adminmsg">' + (tickets.length ? 'No matches.' : (loadedOnce ? 'No tickets yet.' : 'Loading…')) + '</div>'; return; }
-    l.innerHTML = rows.map(function (t) {
-      return '<div class="row' + (t.checkedIn ? ' in' : '') + '"><span>' + esc(t.name) + '</span><small>' + esc(t.id) + (t.checkedIn && t.at ? ' · ' + esc(fmtTime(t.at)) : '') + '</small></div>';
+    l.innerHTML = '<div class="hint">Tap a green name to undo that check-in.</div>' + rows.map(function (t) {
+      return '<div class="row' + (t.checkedIn ? ' in' : '') + '" data-id="' + esc(t.id) + '" data-name="' + esc(t.name) + '" data-in="' + (t.checkedIn ? '1' : '') + '"><span>' + esc(t.name) + '</span><small>' + esc(t.id) + (t.checkedIn && t.at ? ' · ' + esc(fmtTime(t.at)) : '') + '</small></div>';
     }).join('');
   }
   function loadTickets() {
@@ -320,6 +329,25 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     }).catch(function () { if (mode === 'admin' && me) timer = setTimeout(loadTickets, 10000); });
   }
   $('#q').addEventListener('input', render);
+  // tap a green (checked-in) row to undo it
+  var undoId = null;
+  $('#list').addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.row') : null;
+    if (!row || !row.getAttribute('data-in')) return;
+    undoId = row.getAttribute('data-id');
+    $('#dlgT').textContent = 'Undo check-in for ' + row.getAttribute('data-name') + '?';
+    $('#dlg').style.display = 'flex';
+  });
+  $('#dlgNo').onclick = function () { $('#dlg').style.display = 'none'; undoId = null; };
+  $('#dlgYes').onclick = function () {
+    var id = undoId; $('#dlg').style.display = 'none'; undoId = null;
+    if (!id) return;
+    api('uncheckin', { id: id }).then(function (r) {
+      if (r.status === 401) return signedOut('Please sign in again.');
+      loadTickets();
+    });
+  };
+
 
   /* ------------------------------------------------------------- boot */
   api('me').then(function (r) { if (r.status === 200) enter(r.body); else signedOut(''); });
