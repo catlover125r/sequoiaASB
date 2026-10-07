@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#4a0d67">
+<title>HOCO Check-in</title>
+<style>
+:root{--purple:#4a0d67;--grey:#e6e6ea;--green:#c9ecd3;--ok:#1f9d55;--bad:#d63838}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:#111;color:#fff;overflow:hidden}
+button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation}
+.view{display:none;height:100vh;height:100dvh;flex-direction:column}
+.view.on{display:flex}
+.bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--purple);min-height:46px;padding-top:max(6px,env(safe-area-inset-top))}
+.bar h1{font-size:16px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{background:rgba(255,255,255,.18);border-radius:99px;padding:7px 13px;font-size:14px}
+.pill:active{background:rgba(255,255,255,.3)}
+
+/* ---- sign in ---- */
+#signin{align-items:center;justify-content:center;text-align:center;padding:24px;background:linear-gradient(#4a0d67,#2a0640)}
+#signin h2{font-size:28px;margin:0 0 6px}
+#signin p{margin:0 0 24px;opacity:.85}
+#gbtn{min-height:44px;display:flex;justify-content:center}
+#signmsg{margin-top:18px;min-height:1.4em;color:#ffd0d0}
+
+/* ---- helper ---- */
+.scan{position:relative;flex:0 0 31%;background:#000;overflow:hidden}
+.scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.reticle{position:absolute;left:50%;top:44%;width:74%;height:46%;transform:translate(-50%,-50%);border:2px dashed rgba(255,255,255,.85);border-radius:10px;pointer-events:none;box-shadow:0 0 0 999px rgba(0,0,0,.28)}
+.scanbtn{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:var(--purple);border-radius:99px;padding:10px 34px;font-size:17px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.scanbtn:disabled,.go:disabled{opacity:.6}
+#cammsg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:14px;opacity:.9}
+.manual{flex:1;display:flex;flex-direction:column;padding:8px 10px 10px;gap:8px;min-height:0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+#iddisp{flex:none;text-align:center;font-size:30px;letter-spacing:3px;font-variant-numeric:tabular-nums;min-height:44px;line-height:44px;background:#1d1d22;border-radius:10px}
+#iddisp.ph{opacity:.4;font-size:18px;letter-spacing:0}
+.keys{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);gap:8px;min-height:0}
+.key{background:#2b2b33;border-radius:12px;font-size:26px}
+.key:active{background:#44444f}
+.key.fn{background:#1d1d22;font-size:20px}
+.go{flex:none;background:var(--purple);border-radius:12px;font-size:20px;font-weight:700;padding:15px}
+
+/* ---- popups ---- */
+#pop{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;text-align:center;padding:28px;cursor:pointer;color:#fff}
+#pop.ok{background:var(--ok)}
+#pop.bad{background:var(--bad)}
+#pop .t{font-size:clamp(30px,8vw,56px);font-weight:700;line-height:1.2}
+#pop .t b{display:block;font-size:1.15em}
+#pop .s{margin-top:16px;font-size:clamp(17px,4.5vw,24px);opacity:.92}
+#pop .tap{position:absolute;bottom:max(24px,env(safe-area-inset-bottom));left:0;right:0;font-size:14px;opacity:.7}
+
+/* ---- admin ---- */
+#admin{background:#f4f4f6;color:#1b1b1f}
+#admin .bar{color:#fff}
+.search{flex:none;padding:10px 12px;background:#fff;border-bottom:1px solid #ddd}
+.search input{width:100%;font-size:18px;padding:12px 14px;border:1px solid #c9c9d1;border-radius:10px;outline:none}
+.search input:focus{border-color:var(--purple)}
+#list{flex:1;overflow-y:auto;padding:10px 12px 24px;-webkit-overflow-scrolling:touch}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-radius:10px;margin-bottom:7px;background:var(--grey);font-size:18px}
+.row.in{background:var(--green)}
+.row small{font-size:13px;opacity:.65;white-space:nowrap}
+.row span{overflow:hidden;text-overflow:ellipsis}
+#adminmsg{padding:30px 16px;text-align:center;color:#666}
+@media (max-width:400px){.lg{display:none}}
+</style>
+</head>
+<body>
+
+<!-- sign in -->
+<div id="signin" class="view on">
+  <h2>HOCO Check-in</h2>
+  <p>Sequoia ASB staff only</p>
+  <div id="gbtn"></div>
+  <div id="signmsg"></div>
+</div>
+
+<!-- helper: scan + keypad -->
+<div id="helper" class="view">
+  <div class="bar"><h1 id="hwho">Check-in</h1><button class="pill" id="toAdmin" hidden>Admin view</button><button class="pill" id="out1">Sign out</button></div>
+  <div class="scan">
+    <video id="vid" playsinline muted autoplay></video>
+    <div class="reticle"></div>
+    <div id="cammsg">Camera not available. Use the keypad below.</div>
+    <button class="scanbtn" id="scanBtn">Check in</button>
+  </div>
+  <div class="manual">
+    <div id="iddisp" class="ph">Student ID</div>
+    <div class="keys" id="keys"></div>
+    <button class="go" id="goBtn">Check in</button>
+  </div>
+</div>
+
+<!-- admin: search + list -->
+<div id="admin" class="view">
+  <div class="bar"><h1 id="count">Tickets</h1><button class="pill" id="toHelper">Check-in mode</button><button class="pill" id="out2">Sign out</button></div>
+  <div class="search"><input id="q" type="search" placeholder="Search name or student ID" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div id="list"></div>
+</div>
+
+<div id="pop"><div><div class="t" id="popT"></div><div class="s" id="popS"></div></div><div class="tap">Tap anywhere to continue</div></div>
+
+<script src="/vendor/zxing-reader.iife.js"></script>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var me = null, mode = null, busy = false;
+
+  /* ------------------------------------------------------------ api */
+  function api(action, body) {
+    var opt = { credentials: 'same-origin', headers: { 'X-Requested-With': 'hoco', 'Content-Type': 'application/json' } };
+    if (body !== undefined) { opt.method = 'POST'; opt.body = JSON.stringify(body); }
+    return fetch('/api/hoco/' + action, opt).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
+    });
+  }
+
+  /* ----------------------------------------------------------- views */
+  function show(id) {
+    ['signin', 'helper', 'admin'].forEach(function (v) { $('#' + v).classList.toggle('on', v === id); });
+  }
+  function setMode(m) {
+    mode = m;
+    try { sessionStorage.setItem('hocoMode', m); } catch (e) {}
+    if (m === 'admin') { stopCam(); show('admin'); loadTickets(); setTimeout(function () { $('#q').focus(); }, 50); }
+    else { show('helper'); startCam(); }
+  }
+  function enter(user) {
+    me = user;
+    $('#hwho').textContent = user.email;
+    $('#toAdmin').hidden = user.role !== 'admin';
+    var saved = null;
+    try { saved = sessionStorage.getItem('hocoMode'); } catch (e) {}
+    setMode(user.role === 'admin' && saved !== 'helper' ? 'admin' : 'helper');
+  }
+  function signedOut(msg) {
+    me = null; stopCam(); show('signin');
+    $('#signmsg').textContent = msg || '';
+    initGoogle();
+  }
+  function signOut() {
+    api('logout', {}).then(function () { try { sessionStorage.removeItem('hocoMode'); } catch (e) {} signedOut(''); });
+  }
+  $('#out1').onclick = signOut; $('#out2').onclick = signOut;
+  $('#toAdmin').onclick = function () { setMode('admin'); };
+  $('#toHelper').onclick = function () { setMode('helper'); };
+
+  /* ---------------------------------------------------------- sign in */
+  var gLoaded = false, cfg = null;
+  function login(body) {
+    return api('login', body).then(function (r) {
+      if (r.status === 200) { enter(r.body); return; }
+      var m = r.status === 403 ? "This Google account isn't set up for check-in. Ask an administrator."
+            : r.status === 503 ? 'Sign-in is not set up yet.' : 'Sign-in failed. Please try again.';
+      $('#signmsg').textContent = m;
+    });
+  }
+  function initGoogle() {
+    $('#gbtn').innerHTML = '';
+    api('config').then(function (r) {
+      cfg = r.body;
+      if (cfg.dev) {
+        var d = document.createElement('div');
+        d.innerHTML = '<p style="opacity:.8;margin:0 0 8px">Local dev sign-in</p>';
+        ['admin@test.local', 'helper@test.local', 'nobody@test.local'].forEach(function (e) {
+          var b = document.createElement('button'); b.className = 'pill'; b.style.margin = '4px'; b.textContent = e;
+          b.onclick = function () { login({ dev: e }); }; d.appendChild(b);
+        });
+        $('#gbtn').appendChild(d);
+      }
+      if (!cfg.clientId) { if (!cfg.dev) $('#signmsg').textContent = 'Sign-in is not set up yet.'; return; }
+      function render() {
+        google.accounts.id.initialize({ client_id: cfg.clientId, callback: function (resp) { login({ credential: resp.credential }); } });
+        google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill' });
+      }
+      if (gLoaded) return render();
+      var s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+      s.onload = function () { gLoaded = true; render(); };
+      s.onerror = function () { $('#signmsg').textContent = "Couldn't load Google sign-in. Check your connection."; };
+      document.head.appendChild(s);
+    });
+  }
+
+  /* ----------------------------------------------------------- popups */
+  var popAt = 0;
+  function pop(kind, title, sub, html) {
+    var p = $('#pop'); p.className = kind; p.style.display = 'flex'; popAt = Date.now();
+    if (html) $('#popT').innerHTML = html; else $('#popT').textContent = title;
+    $('#popS').textContent = sub || '';
+    if (navigator.vibrate) navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]);
+  }
+  $('#pop').onclick = function () { if (Date.now() - popAt > 350) this.style.display = 'none'; };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  function checkIn(raw) {
+    return api('checkin', { id: raw }).then(function (r) {
+      if (r.status === 401) { signedOut('Please sign in again.'); return; }
+      if (r.status !== 200) { pop('bad', 'Something went wrong', r.body.error === 'not_connected' ? 'The ticket list is not connected yet.' : 'Please try again.'); return; }
+      var b = r.body;
+      if (b.result === 'ok') { pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, have a great hoco.'); clearKeys(); }
+      else if (b.result === 'already') pop('bad', 'Already checked in', b.name || '');
+      else pop('bad', 'No ticket', '');
+    }).catch(function () { pop('bad', 'No connection', 'Check your wifi and try again.'); });
+  }
+
+  /* ----------------------------------------------------------- keypad */
+  var digits = '';
+  function paint() {
+    var d = $('#iddisp'); d.textContent = digits || 'Student ID'; d.classList.toggle('ph', !digits);
+  }
+  function clearKeys() { digits = ''; paint(); }
+  var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
+  keys.forEach(function (k) {
+    var b = document.createElement('button'); b.className = 'key' + (k === 'C' || k === '⌫' ? ' fn' : ''); b.textContent = k;
+    b.onclick = function () {
+      if (k === 'C') digits = ''; else if (k === '⌫') digits = digits.slice(0, -1); else if (digits.length < 10) digits += k;
+      paint();
+    };
+    $('#keys').appendChild(b);
+  });
+  $('#goBtn').onclick = function () {
+    if (!digits || busy) return;
+    busy = true; var b = $('#goBtn'); b.disabled = true;
+    checkIn(digits).then(function () { busy = false; b.disabled = false; });
+  };
+
+  /* ----------------------------------------------------------- camera */
+  var stream = null, vid = $('#vid'), cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+  function startCam() {
+    if (stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { if (!stream) $('#cammsg').style.display = 'flex'; return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
+      .then(function (s) { stream = s; vid.srcObject = s; $('#cammsg').style.display = 'none'; vid.play().catch(function () {}); })
+      .catch(function () { $('#cammsg').style.display = 'flex'; });
+  }
+  function stopCam() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; vid.srcObject = null; } }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopCam(); else if (me && mode === 'helper') startCam();
+  });
+
+  var native = null;
+  try { if ('BarcodeDetector' in window) native = new BarcodeDetector({ formats: ['code_128', 'qr_code', 'code_39', 'ean_13'] }); } catch (e) {}
+  // Library decoder (zxing-cpp compiled to WebAssembly). iPhone Safari has no built-in detector,
+  // and this one is far more forgiving of blur and bar-width distortion than the older JS port.
+  ZXingWASM.setZXingModuleOverrides({ locateFile: function (p) { return p.endsWith('.wasm') ? '/vendor/zxing_reader.wasm' : p; } });
+  var zxOpts = { formats: ['Code128', 'QRCode', 'Code39', 'EAN13'], tryHarder: true, tryRotate: true, tryInvert: true, maxNumberOfSymbols: 1 };
+  function decodeZX(canvas) {
+    var data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+    return ZXingWASM.readBarcodes(data, zxOpts).then(function (r) { return r.length && r[0].text ? r[0].text : null; }, function () { return null; });
+  }
+  function decodeCanvas(canvas) {
+    if (native) {
+      return native.detect(canvas).then(function (r) { return r.length ? r[0].rawValue : decodeZX(canvas); }, function () { return decodeZX(canvas); });
+    }
+    return decodeZX(canvas);
+  }
+  window.hocoDecode = decodeCanvas;   // used by our own tests
+  window.hocoDecodeZX = decodeZX;     // library path only (what iPhone Safari uses)
+  (function () { var w = document.createElement('canvas'); w.width = w.height = 8; decodeZX(w); })();   // warm up: downloads the wasm now, not at the first scan
+
+  function grab() {
+    if (!vid.videoWidth) return null;
+    var w = Math.min(1280, vid.videoWidth), h = Math.round(vid.videoHeight * w / vid.videoWidth);
+    cv.width = w; cv.height = h; cx.drawImage(vid, 0, 0, w, h);
+    return cv;
+  }
+  // keep trying fresh frames for a couple of seconds so the helper only has to tap once
+  function readBarcode(ms) {
+    var end = Date.now() + ms;
+    return new Promise(function (resolve) {
+      (function tick() {
+        var c = grab();
+        var p = c ? decodeCanvas(c) : Promise.resolve(null);
+        p.then(function (txt) {
+          if (txt) return resolve(txt);
+          if (Date.now() > end) return resolve(null);
+          setTimeout(tick, 90);
+        });
+      })();
+    });
+  }
+  $('#scanBtn').onclick = function () {
+    if (busy) return;
+    busy = true; var b = $('#scanBtn'); b.disabled = true; b.textContent = 'Scanning…';
+    function done() { busy = false; b.disabled = false; b.textContent = 'Check in'; }
+    if (!vid.srcObject) { pop('bad', 'Camera is off', 'Use the keypad below.'); return done(); }
+    readBarcode(2600).then(function (txt) {
+      if (!txt) { pop('bad', "Couldn't read the barcode", 'Center it in the box and try again, or use the keypad.'); return done(); }
+      return checkIn(txt).then(done);
+    });
+  };
+
+  /* ------------------------------------------------------------ admin */
+  var tickets = [], loadedOnce = false, timer = null;
+  function fmtTime(iso) {
+    try { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  }
+  function render() {
+    var q = $('#q').value.trim().toLowerCase();
+    var inCount = tickets.filter(function (t) { return t.checkedIn; }).length;
+    $('#count').innerHTML = tickets.length ? inCount + ' / ' + tickets.length + ' <span class="lg">checked </span>in' : 'Tickets';
+    var rows = tickets.filter(function (t) { return !q || t.name.toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0; });
+    var l = $('#list');
+    if (!rows.length) { l.innerHTML = '<div id="adminmsg">' + (tickets.length ? 'No matches.' : (loadedOnce ? 'No tickets yet.' : 'Loading…')) + '</div>'; return; }
+    l.innerHTML = rows.map(function (t) {
+      return '<div class="row' + (t.checkedIn ? ' in' : '') + '"><span>' + esc(t.name) + '</span><small>' + esc(t.id) + (t.checkedIn && t.at ? ' · ' + esc(fmtTime(t.at)) : '') + '</small></div>';
+    }).join('');
+  }
+  function loadTickets() {
+    clearTimeout(timer);
+    api('tickets').then(function (r) {
+      if (r.status === 401) return signedOut('Please sign in again.');
+      if (r.status === 503) { loadedOnce = true; tickets = []; $('#list').innerHTML = '<div id="adminmsg">The ticket sheet is not connected yet.</div>'; }
+      else if (r.status === 200) {
+        loadedOnce = true;
+        tickets = r.body.tickets.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+        render();
+      }
+      if (mode === 'admin' && me) timer = setTimeout(loadTickets, 10000);
+    }).catch(function () { if (mode === 'admin' && me) timer = setTimeout(loadTickets, 10000); });
+  }
+  $('#q').addEventListener('input', render);
+
+  /* ------------------------------------------------------------- boot */
+  api('me').then(function (r) { if (r.status === 200) enter(r.body); else signedOut(''); });
+})();
+</script>
+</body>
+</html>
