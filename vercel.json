@@ -1,6 +1,12 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/t/:code",
+      "destination": "/api/ticket?c=:code"
+    }
+  ],
   "regions": [
     "sfo1"
   ],
