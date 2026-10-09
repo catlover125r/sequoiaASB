@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
       if (store.fast) return send(res, 200, id ? await store.lookup(id) : { found: false });
       const byId = await H.getRoster(store);
       const t = id ? byId.get(id) : null;
-      return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn } : { found: false });
+      return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn, agreed: t.agreed !== false } : { found: false });
     }
 
     if (action === 'checkin') {
@@ -88,7 +88,11 @@ module.exports = async (req, res) => {
       // Instant "no ticket": if our recent copy of the roster doesn't have this ID, don't bother the sheet.
       // (We never answer "already checked in" from the copy: the sheet decides that, so an undo is never missed.)
       if (H.rosterAgeMs() < 90 * 1000) {
-        try { const byId = await H.getRoster(store); if (!byId.has(id)) return send(res, 200, { result: 'no_ticket' }); } catch (e) { /* fall through to the sheet */ }
+        try {
+          const byId = await H.getRoster(store), t = byId.get(id);
+          if (!t) return send(res, 200, { result: 'no_ticket' });
+          if (t.agreed === false && !t.checkedIn) return send(res, 200, { result: 'no_agreement', name: t.name });   // dance agreement not signed
+        } catch (e) { /* fall through to the sheet */ }
       }
       const r = await store.checkin(id, user.email);
       if (r.result === 'ok') H.rosterApply(id, { checkedIn: true, at: new Date().toISOString() });

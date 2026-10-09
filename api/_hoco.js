@@ -187,7 +187,7 @@ const devStore = {
     devStore.write(d);
     return { result: 'ok', name: done.name };
   },
-  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, first: t.first || '', last: t.last || '', checkedIn: !!t.at, at: t.at || null })); },
+  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, first: t.first || '', last: t.last || '', checkedIn: !!t.at, at: t.at || null, ...(typeof t.agreed === 'boolean' ? { agreed: t.agreed } : {}) })); },
   async checkin(id, by) {
     const d = devStore.read();
     const rows = d.filter((t) => t.id === id);

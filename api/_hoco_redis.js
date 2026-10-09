@@ -47,7 +47,9 @@ function create(redis, sheet, hooks, opts) {
       const list = await sheet.list();
       if (!list.length) throw new Error('the sheet returned no tickets; keeping the current roster');
       const roster = {};
-      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '' }); });
+      // agreed: true / false from the sheet's "Agreement" column, or null when the sheet doesn't say (older script):
+      // only an explicit false holds a student at the door.
+      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null }); });
       const tmp = R_ROSTER + ':tmp';
       await redis.del(tmp);
       await redis.hset(tmp, roster);
@@ -136,12 +138,30 @@ function create(redis, sheet, hooks, opts) {
   // ---------------------------------------------------------------- the operations the app uses
   async function lookup(id) {
     const [r, c] = await Promise.all([rosterEntry(id), redis.hget(R_CI, id)]);
-    return r ? { found: true, name: r.name, checkedIn: c != null } : { found: false };
+    return r ? { found: true, name: r.name, checkedIn: c != null, agreed: r.agreed !== false } : { found: false };
+  }
+
+  // A student without the dance agreement is held at the door. The roster can be up to a minute old, and
+  // a student may have just filled the form out on their phone, so before holding someone we re-read the sheet
+  // (at most once per REFRESH_GAP_MS) and judge on the fresh answer.
+  const REFRESH_GAP_MS = 8 * 1000;
+  async function agreementHold(id, r) {
+    if (r.agreed !== false) return null;
+    if (await redis.hget(R_CI, id)) return null;       // already in: let check-in answer "already checked in"
+    const meta = await hgetall(R_META);
+    if (Date.now() - Number(meta.rosterAt || 0) > REFRESH_GAP_MS) {
+      try { await pull(); } catch (e) { /* sheet slow or down: judge on what we have */ }
+      r = await rosterEntry(id);
+      if (!r || r.agreed !== false) return null;
+    }
+    return { result: 'no_agreement', name: r.name };
   }
 
   async function checkin(id, by) {
     const r = await rosterEntry(id);
     if (!r) return { result: 'no_ticket' };
+    const hold = await agreementHold(id, r);
+    if (hold) return hold;
     const rec = { at: new Date().toISOString(), by };
     const won = await redis.hsetnx(R_CI, id, JSON.stringify(rec));     // atomic: only one caller can win
     if (!won) {
@@ -175,7 +195,7 @@ function create(redis, sheet, hooks, opts) {
     const out = [];
     for (const id of Object.keys(roster || {})) {
       const r = parse(roster[id]), c = ci && ci[id] ? parse(ci[id]) : null;
-      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null });
+      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null, agreed: r.agreed !== false });
     }
     return out;
   }
