@@ -235,7 +235,8 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       if (b.result === 'ok') { pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, have a great hoco.'); clearKeys(); }
       else if (b.result === 'no_agreement') pop('warn', '', 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Do not check in yet</div>');
       else if (b.result === 'already') pop('bad', 'Already checked in', b.name || '');
-      else pop('bad', 'No ticket', '');
+      else if (b.result === 'no_ticket') pop('bad', 'No ticket', '');
+      else pop('bad', 'Something went wrong', 'Reload this page and try again.');   // a result this (older) page does not know
     }).catch(function () { pop('bad', 'No connection', 'Check your wifi and try again.'); });
   }
 
