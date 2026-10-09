@@ -29,7 +29,8 @@ img.seal{width:64px;height:64px}
 h1{font-size:22px;margin:10px 0 2px}
 .sub{color:#6b5a78;font-size:14px;margin:0 0 18px}
 .name{font-size:20px;font-weight:700;margin:14px 0 0}
-.num{color:#6b5a78;font-size:15px;margin:2px 0 14px}
+.num{color:#6b5a78;font-size:15px;margin:2px 0}
+.num+.bc,.num+.num+.bc{margin-top:14px}
 .bc{background:#fff;border:1px solid #e6dcee;border-radius:10px;padding:10px 4px}
 .bc svg{width:100%;height:auto;max-height:140px;display:block}
 .id{font-size:26px;letter-spacing:3px;font-weight:700;margin:8px 0 0}
@@ -60,12 +61,12 @@ module.exports = async (req, res) => {
       }
     }
 
-    let name = '';
-    try { const j = await blobBytes(`passes/${id}.json`); if (j) name = String(JSON.parse(j.toString()).name || ''); } catch (e) { /* the name is optional */ }
+    let name = '', ticketNo = '';
+    try { const j = await blobBytes(`passes/${id}.json`); if (j) { const info = JSON.parse(j.toString()); name = String(info.name || ''); ticketNo = String(info.ticketNo || ''); } } catch (e) { /* the name is optional */ }
     const inner = `<div class="card">
 <img class="seal" src="/icon-192.png" alt="">
 <h1>Ravenchella</h1><p class="sub">Sequoia Homecoming · Bringing Back 2016</p>
-${name ? `<p class="name">${esc(name)}</p>` : ''}<p class="num">Ticket #${esc(id)}</p>
+${name ? `<p class="name">${esc(name)}</p>` : ''}<p class="num">ID #${esc(id)}</p>${ticketNo ? `<p class="num">Ticket #${esc(ticketNo)}</p>` : ''}
 <div class="bc">${svg(id)}</div><div class="id">${esc(id)}</div>
 <p class="note">Show this barcode at the door. Take a screenshot so you have it even without service, and turn your screen brightness up when you scan.</p>
 <a class="btn" href="/t/${esc(code)}?pass=1">Download Apple Wallet pass</a>
