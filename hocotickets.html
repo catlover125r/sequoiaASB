@@ -268,6 +268,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   var pill = $('#scanBtn'), held = null, heldInfo = null, heldAt = 0, suppress = { id: null, until: 0 };
   var lookups = {};
   var looping = false, inflight = false, frameNo = 0;
+  var HOLD_MS = 6000;   // keep showing the last number this long after its barcode leaves the picture (a new barcode replaces it at once)
 
   function popupOpen() { return $('#pop').style.display === 'flex'; }
   function paintPill() {
@@ -365,7 +366,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       if (id && !(suppress.id === id && now < suppress.until)) {
         if (id !== held) { held = id; heldInfo = null; paintPill(); preview(id); if (navigator.vibrate) navigator.vibrate(15); }
         heldAt = now;
-      } else if (held && now - heldAt > 1500) { held = null; heldInfo = null; paintPill(); }   // barcode left the picture
+      } else if (held && now - heldAt > HOLD_MS) { held = null; heldInfo = null; paintPill(); }   // barcode has been out of the picture for a while
       next(id ? 150 : 0);
     }, function () { inflight = false; next(100); });
   }
