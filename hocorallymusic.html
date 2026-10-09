@@ -49,9 +49,10 @@ audio{display:block;width:100%;margin-top:8px;accent-color:var(--band)}
     <div class="rally-title">Mannequin Challenge</div>
     <p class="rally-cue">Start after Karina says, "The class with the best poses wins Otter Pops!"</p>
     <div class="track-label">Black Beatles – Gucci Mane, Rae Sremmurd</div>
-    <audio controls preload="none">
-      <source src="/assets/black-beatles.mp3#t=0,25" type="audio/mpeg">
+    <audio controls preload="none" id="bb">
+      <source src="/assets/black-beatles.mp3" type="audio/mpeg">
     </audio>
+    <script>(function(){var a=document.getElementById('bb');a.addEventListener('timeupdate',function(){if(a.currentTime>=25){a.pause();a.currentTime=25;}});})();</script>
   </div>
 
   <!-- 2. JV Cheer -->
