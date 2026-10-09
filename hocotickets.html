@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{--purple:#4a0d67;--grey:#e6e6ea;--green:#c9ecd3;--ok:#1f9d55;--bad:#d63838}
+:root{--purple:#4a0d67;--grey:#e6e6ea;--green:#c9ecd3;--ok:#1f9d55;--bad:#d63838;--warn:#ffd21f}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:#111;color:#fff;overflow:hidden}
@@ -38,6 +38,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .scanbtn.idle{background:rgba(0,0,0,.6);color:rgba(255,255,255,.85);font-weight:500}
 .scanbtn.chk{background:#555}
 .scanbtn.got.bad{background:#b02a2a}
+.scanbtn.got.warn{background:var(--warn);color:#1b1b1f}
 .scanbtn.got{background:var(--purple);padding:7px 34px 8px;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 2px 14px rgba(0,0,0,.6)}
 .scanbtn .num{font-size:32px;font-weight:800;letter-spacing:3px;font-variant-numeric:tabular-nums}
 .scanbtn .tap{font-size:12px;font-weight:500;opacity:.85}
@@ -56,6 +57,11 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 #pop{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;text-align:center;padding:28px;cursor:pointer;color:#fff}
 #pop.ok{background:var(--ok)}
 #pop.bad{background:var(--bad)}
+#pop.warn{background:var(--warn);color:#1b1b1f}
+#pop.warn .t{font-size:clamp(26px,7vw,44px)}
+#pop.warn .nm{margin-top:6px;font-size:clamp(20px,5.5vw,30px);font-weight:700}
+#popQr{display:none;width:min(62vw,36vh,300px);height:min(62vw,36vh,300px);margin:16px auto 0;background:#fff;padding:10px;border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.25)}
+#pop.warn #popQr{display:block}
 #pop .t{font-size:clamp(30px,8vw,56px);font-weight:700;line-height:1.2}
 #pop .t b{display:block;font-size:1.15em}
 #pop .s{margin-top:16px;font-size:clamp(17px,4.5vw,24px);opacity:.92}
@@ -71,6 +77,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-radius:10px;margin-bottom:7px;background:var(--grey);font-size:18px}
 .row.in{background:var(--green);cursor:pointer}
 .row.in:active{filter:brightness(.95)}
+.row.noagree{background:#fff1a6}
 .hint{font-size:13px;color:#777;margin:6px 2px 10px}
 .row small{font-size:13px;opacity:.65;white-space:nowrap}
 .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -120,7 +127,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   <div id="dlg"><div class="box"><p id="dlgT"></p><div class="btns"><button id="dlgNo" class="pill">Cancel</button><button id="dlgYes" class="pill danger">Undo check-in</button></div></div></div>
 </div>
 
-<div id="pop"><div><div class="t" id="popT"></div><div class="s" id="popS"></div></div><div class="tap">Tap anywhere to continue</div></div>
+<div id="pop"><div><div class="t" id="popT"></div><img id="popQr" src="/dance-agreement-qr.svg" alt="QR code for the Student Dance Agreement"><div class="s" id="popS"></div></div><div class="tap">Tap anywhere to continue</div></div>
 
 <script src="/vendor/zxing-reader.iife.js"></script>
 <script>
@@ -226,6 +233,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       if (r.status !== 200) { pop('bad', 'Something went wrong', r.body.error === 'not_connected' ? 'The ticket list is not connected yet.' : 'Please try again.'); return; }
       var b = r.body;
       if (b.result === 'ok') { pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, have a great hoco.'); clearKeys(); }
+      else if (b.result === 'no_agreement') pop('warn', '', 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Do not check in yet</div>');
       else if (b.result === 'already') pop('bad', 'Already checked in', b.name || '');
       else pop('bad', 'No ticket', '');
     }).catch(function () { pop('bad', 'No connection', 'Check your wifi and try again.'); });
@@ -266,6 +274,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     if (held) {
       var cls = 'scanbtn got', sub = 'tap to check in';
       if (heldInfo && heldInfo.found === false) { cls += ' bad'; sub = 'No ticket'; }
+      else if (heldInfo && heldInfo.found && heldInfo.agreed === false && !heldInfo.checkedIn) { cls += ' warn'; sub = esc(heldInfo.name) + ' · NO dance agreement'; }
       else if (heldInfo && heldInfo.found) { sub = esc(heldInfo.name) + (heldInfo.checkedIn ? ' · already in' : ' · tap to check in'); if (heldInfo.checkedIn) cls += ' bad'; }
       pill.className = cls; pill.innerHTML = '<span class="num">' + held + '</span><span class="tap">' + sub + '</span>'; pill.disabled = false; return;
     }
@@ -395,7 +404,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       return;
     }
     l.innerHTML = note + '<div class="hint">' + (q ? rows.length + ' match' + (rows.length === 1 ? '' : 'es') + '. ' : 'Everyone with a ticket, A to Z by last name. ') + 'Tap a green name to undo that check-in.</div>' + rows.map(function (t) {
-      return '<div class="row' + (t.checkedIn ? ' in' : '') + '" data-id="' + esc(t.id) + '" data-name="' + esc(t.name) + '" data-in="' + (t.checkedIn ? '1' : '') + '"><span class="nm">' + esc(shown(t)) + '<small class="id">' + esc(t.id) + '</small></span>' + (t.checkedIn && t.at ? '<small>' + esc(fmtTime(t.at)) + '</small>' : '') + '</div>';
+      return '<div class="row' + (t.checkedIn ? ' in' : '') + (t.agreed === false && !t.checkedIn ? ' noagree' : '') + '" data-id="' + esc(t.id) + '" data-name="' + esc(t.name) + '" data-in="' + (t.checkedIn ? '1' : '') + '"><span class="nm">' + esc(shown(t)) + '<small class="id">' + esc(t.id) + '</small></span>' + (t.agreed === false && !t.checkedIn ? '<small>no agreement</small>' : '') + (t.checkedIn && t.at ? '<small>' + esc(fmtTime(t.at)) + '</small>' : '') + '</div>';
     }).join('');
   }
   function loadTickets() {
