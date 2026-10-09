@@ -141,18 +141,24 @@ function create(redis, sheet, hooks, opts) {
     return r ? { found: true, name: r.name, checkedIn: c != null, agreed: r.agreed !== false } : { found: false };
   }
 
-  // A student without the dance agreement is held at the door. The roster can be up to a minute old, and
-  // a student may have just filled the form out on their phone, so before holding someone we re-read the sheet
-  // (at most once per REFRESH_GAP_MS) and judge on the fresh answer.
+  // A student without the dance agreement is held at the door. The roster can be up to a minute old and a student
+  // may have just filled the form out on their phone, so:
+  //   * the FIRST scan answers the yellow screen immediately and refreshes the roster from the sheet in the background;
+  //   * a SECOND scan of the same student (they came back, probably after signing) waits for a fresh read of the sheet
+  //     (at most one read per REFRESH_GAP_MS) and judges on that.
   const REFRESH_GAP_MS = 8 * 1000;
   async function agreementHold(id, r) {
     if (r.agreed !== false) return null;
     if (await redis.hget(R_CI, id)) return null;       // already in: let check-in answer "already checked in"
-    const meta = await hgetall(R_META);
+    const [seen, meta] = await Promise.all([redis.get(P + 'held:' + id), hgetall(R_META)]);
+    redis.set(P + 'held:' + id, '1', { ex: 900 }).catch(() => {});
     if (Date.now() - Number(meta.rosterAt || 0) > REFRESH_GAP_MS) {
-      try { await pull(); } catch (e) { /* sheet slow or down: judge on what we have */ }
-      r = await rosterEntry(id);
-      if (!r || r.agreed !== false) return null;
+      if (!seen) bg(pull());
+      else {
+        try { await pull(); } catch (e) { /* sheet slow or down: judge on what we have */ }
+        r = await rosterEntry(id);
+        if (!r || r.agreed !== false) return null;
+      }
     }
     return { result: 'no_agreement', name: r.name };
   }
