@@ -49,7 +49,8 @@ function create(redis, sheet, hooks, opts) {
       const roster = {};
       // agreed: true / false from the sheet's "Agreement" column, or null when the sheet doesn't say (older script):
       // only an explicit false holds a student at the door.
-      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null }); });
+      // guest: the name from the sheet's "Guest Name" column when the student bought a guest ticket ('' = no guest)
+      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null, guest: typeof t.guest === 'string' ? t.guest.trim() : '' }); });
       const tmp = R_ROSTER + ':tmp';
       await redis.del(tmp);
       await redis.hset(tmp, roster);
@@ -179,7 +180,7 @@ function create(redis, sheet, hooks, opts) {
       redis.rpush(R_EVENTS, JSON.stringify({ t: rec.at, a: 'CHECK IN', id, name: r.name, by })),
     ]);
     bg(pushSoon());
-    return { result: 'ok', name: r.name };
+    return r.guest ? { result: 'ok', name: r.name, guest: r.guest } : { result: 'ok', name: r.name };
   }
 
   async function uncheckin(id, by) {
