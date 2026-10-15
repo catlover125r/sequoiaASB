@@ -187,7 +187,7 @@ const devStore = {
     devStore.write(d);
     return { result: 'ok', name: done.name };
   },
-  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, first: t.first || '', last: t.last || '', checkedIn: !!t.at, at: t.at || null, ...(typeof t.agreed === 'boolean' ? { agreed: t.agreed } : {}) })); },
+  async list() { return devStore.read().map((t) => ({ id: t.id, name: t.name, first: t.first || '', last: t.last || '', checkedIn: !!t.at, at: t.at || null, ...(typeof t.agreed === 'boolean' ? { agreed: t.agreed } : {}), ...(t.guest ? { guest: t.guest } : {}) })); },
   async checkin(id, by) {
     const d = devStore.read();
     const rows = d.filter((t) => t.id === id);
@@ -196,7 +196,7 @@ const devStore = {
     if (!open) return { result: 'already', name: rows[0].name, at: rows[0].at };
     open.at = new Date().toISOString(); open.by = by;
     devStore.write(d);
-    return { result: 'ok', name: open.name };
+    return open.guest ? { result: 'ok', name: open.name, guest: open.guest } : { result: 'ok', name: open.name };
   },
 };
 
