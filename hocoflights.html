@@ -39,11 +39,10 @@ h1{font-size:23px;line-height:1.15;margin:0 0 6px;text-align:center}
 #map.dragging #me{transition:none}
 #hint{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.35}}
-#seattxt{text-align:center;font-size:14px;opacity:.75;min-height:1.3em;margin-top:6px}
 
 /* ---- step 2: flashlight ---- */
 #perm{justify-content:center}
-.icon{font-size:64px;text-align:center;line-height:1;margin-bottom:10px}
+#permAsk h1{margin:10px 0 18px}
 
 /* ---- the show ---- */
 #show{padding:0;background:#000}
@@ -52,11 +51,8 @@ h1{font-size:23px;line-height:1.15;margin:0 0 6px;text-align:center}
 #info{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 22px max(20px,env(safe-area-inset-bottom));text-align:center;transition:opacity .15s}
 #glow.lit + #info{opacity:0}
 #info.dim{opacity:.22}
-#num{font-size:84px;font-weight:800;line-height:1;margin:6px 0 2px;color:var(--glow)}
-#numlbl{font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.6}
-#now{margin-top:18px;font-size:16px;opacity:.85}
-#tips{margin-top:18px;font-size:15px;line-height:1.45;opacity:.75;max-width:330px}
-#tips b{color:#fff}
+#inshow{font-size:34px;font-weight:800;line-height:1.15;margin:0;color:var(--glow)}
+#tips{margin-top:16px;font-size:17px;line-height:1.45;opacity:.8;max-width:330px}
 #tools{position:absolute;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom));display:flex;justify-content:center;gap:4px;flex-wrap:wrap}
 #tools .link{font-size:13px;padding:8px 10px;margin:0}
 #banner{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:#5a1414;color:#fff;border-radius:12px;padding:12px 14px;font-size:15px;display:none;text-align:center}
@@ -92,7 +88,6 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
       </g>
     </svg>
   </div>
-  <div id="seattxt"></div>
   <button class="big" id="next" disabled>Next</button>
 </section>
 
@@ -101,9 +96,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
   <div class="brand">Sequoia HOCO Flashlights</div>
   <div class="center"><span class="step">STEP 2 OF 2</span></div>
   <div id="permAsk">
-    <div class="icon">🔦</div>
-    <h1 id="permTitle">Let us run your flashlight</h1>
-    <p class="sub">Tap the button, then tap <b>Allow</b> when your phone asks about the camera. We only use it to turn the flashlight on and off. Nothing is recorded or sent anywhere.</p>
+    <h1>We need access to your camera to use your flashlight.</h1>
     <button class="big purple" id="joinBtn">Join the light show</button>
     <button class="link" id="back1">Change my spot</button>
   </div>
@@ -114,9 +107,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
 <section class="view" id="show">
   <div id="glow"></div>
   <div id="info">
-    <div id="numlbl">You're number</div>
-    <div id="num">–</div>
-    <div id="now">Waiting for the show…</div>
+    <h1 id="inshow">You are in the show!</h1>
     <div id="tips"></div>
   </div>
   <div id="banner"></div>
@@ -179,18 +170,12 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     hl.setAttribute('x', SEC.x + c.x * CW); hl.setAttribute('y', SEC.y + c.y * CH);
     hl.setAttribute('width', CW); hl.setAttribute('height', CH);
   }
-  function describeSeat(c) {
-    var row = c.y + 1;
-    var side = c.x < 7 ? 'left side' : c.x > 12 ? 'right side' : 'middle';
-    return 'Row ' + row + ' from the front · ' + side;
-  }
   function setSeat(c) {
     seat = c;
     putDot(cellCentre(c));
     $('hint').style.display = 'none';
     $('sectxt').setAttribute('opacity', '.25');
     map.classList.add('placed');
-    $('seattxt').textContent = describeSeat(c);
     $('next').disabled = false;
   }
 
@@ -224,7 +209,6 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
   $('next').onclick = function () {
     if (!seat) return;
     saved.x = seat.x; saved.y = seat.y; save();
-    $('permTitle').textContent = saved.n ? 'Welcome back, #' + saved.n + '!' : 'Let us run your flashlight';
     show('perm');
   };
   $('back1').onclick = function () { show('pick'); };
@@ -326,9 +310,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     if (camErr) {
       stopCamera();
       saved.mode = 'screen'; save();
-      startShow(camErr.name === 'NotAllowedError'
-        ? 'Camera access was blocked, so your <b>screen</b> will light up instead.'
-        : 'This phone/browser can’t control the flashlight, so your <b>screen</b> will light up instead.');
+      startShow();   // no flashlight (blocked or not supported): the screen lights up instead
       return;
     }
     // straight into the show (the screen lights up too, so a phone whose flashlight silently ignores us still joins in)
@@ -338,21 +320,20 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
   };
 
   // ---------------------------------------------------------------- the show
-  var state = { mode: 'off' }, running = false, lit = null, lastShowName = '';
+  var state = { mode: 'off' }, running = false, lit = null, showing = null;
   var glow = $('glow');
 
-  function tips(extra) {
-    var t = saved.mode === 'torch'
-      ? 'Hold your phone <b>up high</b> with the flashlight toward the field.'
-      : 'Turn your <b>brightness all the way up</b> and hold your phone up with the <b>screen facing the field</b>.';
-    $('tips').innerHTML = (extra ? extra + '<br><br>' : '') + t + '<br>Keep this page open and your screen on.';
+  function tips() {
+    $('tips').textContent = saved.mode === 'torch'
+      ? 'Hold your phone up high with the flashlight facing the field. Keep this page open and your screen on.'
+      : 'Hold your phone up high with the screen facing the field and your brightness all the way up. Keep this page open and your screen on.';
+    $('modeBtn').textContent = saved.mode === 'torch' ? 'Use my screen instead' : 'Try the flashlight';
     $('modeBtn').textContent = saved.mode === 'torch' ? 'Use my screen instead' : 'Try the flashlight';
   }
 
-  function startShow(note) {
+  function startShow() {
     show('show');
-    $('num').textContent = '#' + saved.n;
-    tips(note);
+    tips();
     if (!running) {
       running = true;
       HocoClient.syncClock(6);
@@ -371,12 +352,11 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     if (saved.mode === 'torch' && torch.ok) wantTorch(HocoLights.lightAt(state, now + torch.lat, me));
     // while a show runs, keep the words faint so the section stays dark
     var active = HocoLights.activeState(state, now);
-    var name = active.mode === 'off' ? 'Waiting for the show…' : 'Now: ' + HocoLights.describe(active);
-    if (name !== lastShowName) {
-      lastShowName = name;
-      $('now').textContent = name;
-      $('info').classList.toggle('dim', active.mode !== 'off');
-      $('tools').style.display = active.mode !== 'off' ? 'none' : '';
+    var isOn = active.mode !== 'off';
+    if (isOn !== showing) {
+      showing = isOn;
+      $('info').classList.toggle('dim', isOn);
+      $('tools').style.display = isOn ? 'none' : '';
     }
   }
 
@@ -386,7 +366,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     HocoClient.sample(function () { return HocoClient.api('ping', { id: saved.id }); }).then(function (r) {
       if (r && r.ok === false) {
         saved.id = null; save();
-        return joinServer().then(function () { $('num').textContent = '#' + saved.n; });
+        return joinServer();
       }
     }).catch(function () {});
   }
@@ -436,7 +416,6 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
 
   // back again (page reloaded / reopened): skip to the flashlight step with the saved spot
   if (saved.id && seat) {
-    $('permTitle').textContent = 'Welcome back, #' + saved.n + '!';
     show('perm');
   }
 })();
