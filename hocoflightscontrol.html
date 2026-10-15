@@ -39,8 +39,6 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
 #pending{font-size:14px;color:#ffd666;min-height:1.2em}
 .count{text-align:center;min-width:76px}
 .count .val{font-size:26px}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;margin-right:6px;vertical-align:middle}
-.dot.live{background:#3ddc84;box-shadow:0 0 8px #3ddc84}
 
 /* buttons */
 .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -101,12 +99,10 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
 
     <div class="status">
       <div class="now">
-        <div class="lbl"><span class="dot" id="liveDot"></span>Phones are showing</div>
         <div class="val" id="nowName">…</div>
         <div id="pending"></div>
       </div>
-      <div class="count"><div class="val" id="cActive">0</div><div class="lbl">here now</div></div>
-      <div class="count"><div class="val" id="cJoined">0</div><div class="lbl">joined</div></div>
+      <div class="count"><div class="val" id="cActive">0</div><div class="lbl">Phones</div></div>
     </div>
     <div id="err"></div>
 
@@ -222,7 +218,6 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
     call('people').then(function (r) {
       people = r;
       $('cActive').textContent = r.active;
-      $('cJoined').textContent = r.joined;
     }).catch(function () {});
   }
 
@@ -237,7 +232,6 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
     lastStatus = key;
     $('nowName').textContent = name;
     $('pending').textContent = pend;
-    $('liveDot').classList.toggle('live', cur.mode !== 'off');
     var target = upcoming || cur;
     Array.prototype.forEach.call(document.querySelectorAll('.qbtn'), function (b) {
       b.classList.toggle('cur', target.mode === b.dataset.mode);
