@@ -4,11 +4,15 @@
 // Every phone runs the same math on the same (server-synced) clock, so nothing has to be sent while a show runs:
 //   on = HocoLights.lightAt(state, serverNowMs, me)
 // state : { mode: 'off'|'on'|'split'|'seq', seq: '<id>', at: <server ms it starts>, prev: <the state before it> }
-// me    : { n: join number (1, 2, 3...), x: 0..19 column (left to right on the diagram), y: 0..19 row (0 = front, by the field) }
+// me    : { n: join number (1, 2, 3...), x: 0..19 across (left to right on the diagram), y: 0..9 row (0 = front, by the field) }
 (function (root) {
   'use strict';
-  var GRID = 20;
-  var C = (GRID - 1) / 2;   // centre of the grid (9.5)
+  // The student section has 10 rows; how many people fit across is unknown, so it is split into 20 spots.
+  // On the map the rows are spaced as if there were 12, leaving the very front and back strips unused,
+  // which makes a spot about as tall as it is wide (so circles look like circles).
+  var COLS = 20, ROWS = 10;
+  var CX = (COLS - 1) / 2, CY = (ROWS - 1) / 2;   // centre of the section (9.5, 4.5)
+  var MAXD = Math.sqrt(CX * CX + CY * CY);         // centre to a corner
 
   // A stable "random" number in [0, 1) for any pair of integers (no Math.random: every phone must agree).
   function rnd(a, b) {
@@ -80,22 +84,22 @@
   var wave = parts([
     // a band of light sweeps left -> right -> left -> right -> left (2 s per sweep)
     [8000, function (t, p) {
-      var k = Math.floor(t / 2000), u = mod(t, 2000) / 2000, pos = -4 + u * (GRID + 7);
-      return band(k % 2 ? GRID - 1 - pos : pos, p.x, 1.6);
+      var k = Math.floor(t / 2000), u = mod(t, 2000) / 2000, pos = -4 + u * (COLS + 7);
+      return band(k % 2 ? COLS - 1 - pos : pos, p.x, 1.6);
     }],
     // front to back and back again (1.5 s each)
     [6000, function (t, p) {
-      var k = Math.floor(t / 1500), u = mod(t, 1500) / 1500, pos = -4 + u * (GRID + 7);
-      return band(k % 2 ? GRID - 1 - pos : pos, p.y, 1.6);
+      var k = Math.floor(t / 1500), u = mod(t, 1500) / 1500, pos = -4 + u * (ROWS + 7);
+      return band(k % 2 ? ROWS - 1 - pos : pos, p.y, 1.6);
     }],
     // corner to corner diagonals
     [6000, function (t, p) {
-      var k = Math.floor(t / 2000), u = mod(t, 2000) / 2000, pos = -5 + u * (2 * GRID + 8);
-      var d = k === 1 ? (GRID - 1 - p.x) + p.y : p.x + p.y;
-      return band(k === 2 ? 2 * (GRID - 1) - pos : pos, d, 2.2);
+      var span = COLS + ROWS - 2, k = Math.floor(t / 2000), u = mod(t, 2000) / 2000, pos = -5 + u * (span + 10);
+      var d = k === 1 ? (COLS - 1 - p.x) + p.y : p.x + p.y;
+      return band(k === 2 ? span - pos : pos, d, 2.2);
     }],
     // fill up from the left, hold, out
-    [2800, function (t, p) { return p.x <= ((t - 300) / 2000) * GRID; }],
+    [2800, function (t, p) { return p.x <= ((t - 300) / 2000) * COLS; }],
     [1500, OFF],
   ]);
 
@@ -104,15 +108,15 @@
   function ring(phase, gap, width, lastRing) { return phase >= 0 && Math.floor(phase / gap) <= lastRing && mod(phase, gap) < width; }
   var ripple = parts([
     // rings spread out from the middle of the section
-    [10000, function (t, p) { return ring(t * 0.008 - dist(p, C, C), 7, 2.4, 9); }],
+    [10000, function (t, p) { return ring(t * 0.008 - dist(p, CX, CY), 7, 2.4, 9); }],
     // a splash from the field: rings roll from the front row to the back
-    [6000, function (t, p) { return ring(t * 0.01 - dist(p, C, -3), 8, 2.8, 4); }],
+    [6000, function (t, p) { return ring(t * 0.01 - dist(p, CX, -3), 8, 2.8, 4); }],
     // rings close in on the middle
-    [4000, function (t, p) { return ring(t * 0.008 - (14 - dist(p, C, C)), 7, 2.4, 2); }],
+    [4000, function (t, p) { return ring(t * 0.008 - (MAXD + 0.5 - dist(p, CX, CY)), 7, 2.4, 2); }],
     // a spotlight wanders around the section
     [4800, function (t, p) {
       var a = tick(t) / 4800 * Math.PI * 2;
-      return dist(p, C + Math.sin(a) * 6.5, C + Math.sin(a * 2) * 5) < 4.2;
+      return dist(p, CX + Math.sin(a) * 6.5, CY + Math.sin(a * 2) * 2.5) < 3.6;
     }],
     [1200, ON],   // the whole section lights up
     [1000, OFF],
@@ -121,17 +125,17 @@
   var checkers = parts([
     // checkerboard, flipping
     [6000, function (t, p) { return blink(t, 1500) === ((p.x + p.y) % 2 === 0); }],
-    // big squares (4 x 4 of them), flipping
+    // big squares (4 across, 2 deep), flipping
     [6000, function (t, p) { return blink(t, 2000) === ((Math.floor(p.x / 5) + Math.floor(p.y / 5)) % 2 === 0); }],
     // diagonal stripes rolling across
     [6000, function (t, p) { return mod(p.x + p.y - tick(t) / TICK, 8) < 4; }],
     // left half / right half, then front half / back half
-    [2000, function (t, p) { return blink(t, 1000) === (p.x < GRID / 2); }],
-    [2000, function (t, p) { return blink(t, 1000) === (p.y < GRID / 2); }],
+    [2000, function (t, p) { return blink(t, 1000) === (p.x < COLS / 2); }],
+    [2000, function (t, p) { return blink(t, 1000) === (p.y < ROWS / 2); }],
     // a lighthouse beam spins around the middle (two beams, one turn every 3 s)
     [4500, function (t, p) {
-      var a = Math.atan2(p.y - C, p.x - C), b = tick(t) / 3000 * Math.PI * 2;
-      return Math.abs(mod(a - b, Math.PI) - Math.PI / 2) > Math.PI / 2 - 0.42 || dist(p, C, C) < 1.2;
+      var a = Math.atan2(p.y - CY, p.x - CX), b = tick(t) / 3000 * Math.PI * 2;
+      return Math.abs(mod(a - b, Math.PI) - Math.PI / 2) > Math.PI / 2 - 0.42 || dist(p, CX, CY) < 1.2;
     }],
     [1500, ON],
     [1000, OFF],
@@ -176,7 +180,7 @@
   // A made-up join number for a seat, used by the control page's "full section" preview.
   function fakeN(x, y) { return 1 + Math.floor(rnd(x + 101, y + 211) * 1000); }
 
-  var api = { GRID: GRID, SEQS: SEQS, BY_ID: BY_ID, lightAt: lightAt, activeState: activeState, describe: describe, fakeN: fakeN, rnd: rnd };
+  var api = { COLS: COLS, ROWS: ROWS, SEQS: SEQS, BY_ID: BY_ID, lightAt: lightAt, activeState: activeState, describe: describe, fakeN: fakeN, rnd: rnd };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HocoLights = api;
 })(this);

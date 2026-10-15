@@ -217,7 +217,9 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
 
   // ---------------------------------------------------------------- preview
   var cv = $('prev'), cx = cv.getContext('2d');
-  var GRID = HocoLights.GRID, SEC = { x: 0, y: 290, w: 806, h: 545 }, CW = SEC.w / GRID, CH = SEC.h / GRID;
+  // same map as the phones: 20 spots across, 10 rows spaced as if there were 12 (front and back strip unused)
+  var COLS = HocoLights.COLS, ROWS = HocoLights.ROWS, SEC = { x: 0, y: 290, w: 806, h: 545 };
+  var CW = SEC.w / COLS, CH = SEC.h / (ROWS + 2), TOP = SEC.y + CH;
   var prevMode = 'full';
   try { prevMode = localStorage.getItem(KEY + '.prev') || 'full'; } catch (e) {}
   function paintTog() {
@@ -231,7 +233,7 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
     try { localStorage.setItem(KEY + '.prev', v); } catch (e) {}
   };
   var full = [];
-  for (var yy = 0; yy < GRID; yy++) for (var xx = 0; xx < GRID; xx++) full.push({ n: HocoLights.fakeN(xx, yy), x: xx, y: yy, active: true });
+  for (var yy = 0; yy < ROWS; yy++) for (var xx = 0; xx < COLS; xx++) full.push({ n: HocoLights.fakeN(xx, yy), x: xx, y: yy, active: true });
 
   function drawStatic() {
     cx.fillStyle = '#29351f'; cx.fillRect(0, 0, 806, 206);
@@ -258,10 +260,10 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
       var on = HocoLights.lightAt(state, now, p);
       var jx = prevMode === 'full' ? 0 : (HocoLights.rnd(p.n, 1) - 0.5) * CW * 0.6;
       var jy = prevMode === 'full' ? 0 : (HocoLights.rnd(p.n, 2) - 0.5) * CH * 0.6;
-      var px = SEC.x + (p.x + 0.5) * CW + jx, py = SEC.y + (p.y + 0.5) * CH + jy;
+      var px = SEC.x + (p.x + 0.5) * CW + jx, py = TOP + (p.y + 0.5) * CH + jy;
       if (prevMode === 'full') {
         cx.fillStyle = on ? '#fff' : '#262626';
-        cx.fillRect(SEC.x + p.x * CW + 2, SEC.y + p.y * CH + 2, CW - 4, CH - 4);
+        cx.fillRect(SEC.x + p.x * CW + 2, TOP + p.y * CH + 2, CW - 4, CH - 4);
       } else {
         cx.beginPath();
         cx.arc(px, py, on ? 9 : 6, 0, Math.PI * 2);
