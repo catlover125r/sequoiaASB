@@ -19,6 +19,7 @@ button{border:0;cursor:pointer;touch-action:manipulation}
 .wrap{max-width:980px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) 16px 40px}
 .brand{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--glow);font-weight:700}
 h1{font-size:24px;margin:2px 0 14px}
+h2.title{font-size:24px;letter-spacing:0;text-transform:none;opacity:1;font-weight:800;margin:28px 0 2px}
 h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margin:22px 0 8px;font-weight:700}
 
 /* sign in */
@@ -62,21 +63,7 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
 .tog button.sel{background:var(--band);opacity:1}
 #prevWrap{margin-top:10px;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
 #prev{display:block;width:100%;height:auto}
-.note{font-size:13px;opacity:.55;margin-top:6px;line-height:1.4}
 
-/* footer */
-.foot{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
-.fbtn{border-radius:12px;padding:12px 16px;background:var(--card);border:1px solid var(--line);font-weight:600}
-.fbtn.qr{background:#fff;color:#000}
-.fbtn.danger.arm{background:#b3261e;border-color:#b3261e}
-
-/* QR overlay */
-#qr{display:none;position:fixed;inset:0;background:#fff;color:#000;z-index:50;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
-#qr.on{display:flex}
-#qr img{width:min(86vw,72vh);height:auto;image-rendering:pixelated}
-#qr .t{font-size:clamp(22px,5vw,40px);font-weight:900;margin-top:10px}
-#qr .u{font-size:clamp(15px,3vw,22px);opacity:.7}
-#qr .x{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;background:#000;color:#fff;border-radius:99px;padding:10px 18px;font-weight:700}
 #err{color:#ffb4b4;min-height:1.2em;margin-top:8px;font-size:14px}
 </style>
 </head>
@@ -113,9 +100,10 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
       <button class="qbtn split" data-mode="split"><span>HALF &amp; HALF</span></button>
     </div>
 
-    <h2>Shows that work anywhere <span style="text-transform:none;letter-spacing:0;font-weight:400">(loop until you stop them)</span></h2>
+    <h2 class="title">Shows</h2>
+    <h2>Doesn't Use Location</h2>
     <div class="seqs" id="seqsAny"></div>
-    <h2>Shows that use the seat map</h2>
+    <h2>Uses Location</h2>
     <div class="seqs" id="seqsSeat"></div>
 
     <h2>Live preview</h2>
@@ -126,22 +114,9 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
       </div>
     </div>
     <div id="prevWrap"><canvas id="prev" width="806" height="878"></canvas></div>
-    <div class="note">“Full section” pretends every spot on the 20 × 20 grid has a phone. “Real phones” shows the people who joined, where they said they are (grey = page closed). Changes start about 3.5 seconds after you tap, so every phone switches at the same moment.</div>
-
-    <div class="foot">
-      <button class="fbtn qr" id="qrBtn">Show join QR code</button>
-      <button class="fbtn danger" id="resetBtn">Reset everyone's numbers</button>
-      <button class="fbtn" id="logoutBtn">Lock</button>
-    </div>
   </div>
 </section>
 
-<section id="qr">
-  <button class="x" id="qrClose">Close</button>
-  <img src="/lights/join-qr.svg" alt="QR code for sequoiaasb.org/hocoflights">
-  <div class="t">Scan to join the light show!</div>
-  <div class="u">sequoiaasb.org/hocoflights</div>
-</section>
 
 <script src="/lights/sequences.js"></script>
 <script src="/lights/client.js"></script>
@@ -180,7 +155,6 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
       $('loginErr').textContent = e.status === 401 ? 'Wrong password.' : 'Could not sign in (' + e.message + ').';
     });
   };
-  $('logoutBtn').onclick = signedOut;
 
   // ---------------------------------------------------------------- the buttons
   function seqCard(q) {
@@ -189,7 +163,7 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
     b.dataset.seq = q.id;
     b.innerHTML = '<b></b><div class="meta"></div><div class="d"></div>';
     b.querySelector('b').textContent = q.name;
-    b.querySelector('.meta').textContent = Math.round(q.dur / 1000) + ' s loop' + (q.seat ? ' · uses seats' : ' · works anywhere');
+    b.querySelector('.meta').textContent = Math.round(q.dur / 1000) + ' s loop';
     b.querySelector('.d').textContent = q.desc;
     b.onclick = function () { setMode('seq', q.id); };
     return b;
@@ -306,24 +280,6 @@ h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margi
     paintStatus(now);
     draw(now);
   }
-
-  // ---------------------------------------------------------------- reset / QR
-  var armT = null;
-  $('resetBtn').onclick = function () {
-    var b = this;
-    if (!b.classList.contains('arm')) {
-      b.classList.add('arm');
-      b.textContent = 'Tap again to reset everyone';
-      clearTimeout(armT);
-      armT = setTimeout(function () { b.classList.remove('arm'); b.textContent = 'Reset everyone’s numbers'; }, 4000);
-      return;
-    }
-    clearTimeout(armT);
-    b.classList.remove('arm'); b.textContent = 'Reset everyone’s numbers';
-    call('reset', {}).then(loadPeople).catch(function (e) { $('err').textContent = 'Reset failed (' + e.message + ').'; });
-  };
-  $('qrBtn').onclick = function () { $('qr').classList.add('on'); };
-  $('qrClose').onclick = function () { $('qr').classList.remove('on'); };
 
   // ---------------------------------------------------------------- go
   var watcher = null, started = false;
