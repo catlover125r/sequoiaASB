@@ -123,9 +123,11 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
 <script>
 (function () {
   'use strict';
-  var GRID = HocoLights.GRID;
-  var SEC = { x: 0, y: 290, w: 806, h: 545 };
-  var CW = SEC.w / GRID, CH = SEC.h / GRID;
+  var COLS = HocoLights.COLS, ROWS = HocoLights.ROWS;
+  var SEC = { x: 0, y: 290, w: 806, h: 545 };          // the light gray student section on the map
+  // 10 real rows, spaced as if there were 12: the very front and back strips can't be picked
+  var CW = SEC.w / COLS, CH = SEC.h / (ROWS + 2);
+  var USE = { x: SEC.x, y: SEC.y + CH, w: SEC.w, h: CH * ROWS };
   var KEY = 'hocoflights.v1';
   var $ = function (id) { return document.getElementById(id); };
 
@@ -142,9 +144,11 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
   var map = $('map'), me = $('me'), seat = null;   // seat = { x, y } in grid cells
   (function drawGrid() {
     var g = $('gridlines'), s = '';
-    for (var i = 1; i < GRID; i++) {
-      s += '<line x1="' + (SEC.x + i * CW) + '" y1="' + SEC.y + '" x2="' + (SEC.x + i * CW) + '" y2="' + (SEC.y + SEC.h) + '"/>';
-      s += '<line x1="' + SEC.x + '" y1="' + (SEC.y + i * CH) + '" x2="' + (SEC.x + SEC.w) + '" y2="' + (SEC.y + i * CH) + '"/>';
+    for (var i = 1; i < COLS; i++) {
+      s += '<line x1="' + (USE.x + i * CW) + '" y1="' + USE.y + '" x2="' + (USE.x + i * CW) + '" y2="' + (USE.y + USE.h) + '"/>';
+    }
+    for (var j = 0; j <= ROWS; j++) {
+      s += '<line x1="' + USE.x + '" y1="' + (USE.y + j * CH) + '" x2="' + (USE.x + USE.w) + '" y2="' + (USE.y + j * CH) + '"/>';
     }
     g.innerHTML = s;
   })();
@@ -154,20 +158,24 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     pt.x = ev.clientX; pt.y = ev.clientY;
     return pt.matrixTransform(map.getScreenCTM().inverse());
   }
+  // the dot can only sit on the 10 usable rows (not the front or back strip)
   function clampToSection(p) {
-    return { x: Math.min(SEC.x + SEC.w - 1, Math.max(SEC.x + 1, p.x)), y: Math.min(SEC.y + SEC.h - 1, Math.max(SEC.y + 1, p.y)) };
+    return { x: Math.min(USE.x + USE.w - 1, Math.max(USE.x + 1, p.x)), y: Math.min(USE.y + USE.h - 1, Math.max(USE.y + 1, p.y)) };
   }
   function inSection(p) { return p.x >= SEC.x && p.x <= SEC.x + SEC.w && p.y >= SEC.y && p.y <= SEC.y + SEC.h; }
   function cellOf(p) {
-    return { x: Math.min(GRID - 1, Math.floor((p.x - SEC.x) / CW)), y: Math.min(GRID - 1, Math.floor((p.y - SEC.y) / CH)) };
+    return {
+      x: Math.max(0, Math.min(COLS - 1, Math.floor((p.x - USE.x) / CW))),
+      y: Math.max(0, Math.min(ROWS - 1, Math.floor((p.y - USE.y) / CH))),
+    };
   }
-  function cellCentre(c) { return { x: SEC.x + (c.x + 0.5) * CW, y: SEC.y + (c.y + 0.5) * CH }; }
+  function cellCentre(c) { return { x: USE.x + (c.x + 0.5) * CW, y: USE.y + (c.y + 0.5) * CH }; }
   function putDot(p) {
     me.style.display = '';
     me.setAttribute('transform', 'translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ')');
     var c = cellOf(p), hl = $('cellhl');
     hl.style.display = '';
-    hl.setAttribute('x', SEC.x + c.x * CW); hl.setAttribute('y', SEC.y + c.y * CH);
+    hl.setAttribute('x', USE.x + c.x * CW); hl.setAttribute('y', USE.y + c.y * CH);
     hl.setAttribute('width', CW); hl.setAttribute('height', CH);
   }
   function setSeat(c) {
@@ -199,12 +207,12 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     if (!dragging) return;
     dragging = false;
     map.classList.remove('dragging');
-    setSeat(cellOf(clampToSection(svgPoint(ev))));   // snap to the 20 x 20 grid
+    setSeat(cellOf(clampToSection(svgPoint(ev))));   // snap to a spot: 20 across, 10 rows
   }
   map.addEventListener('pointerup', endDrag);
   map.addEventListener('pointercancel', endDrag);
 
-  if (typeof saved.x === 'number' && typeof saved.y === 'number') setSeat({ x: saved.x, y: saved.y });
+  if (typeof saved.x === 'number' && typeof saved.y === 'number' && saved.x < COLS && saved.y < ROWS) setSeat({ x: saved.x, y: saved.y });
 
   $('next').onclick = function () {
     if (!seat) return;

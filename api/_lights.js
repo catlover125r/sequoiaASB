@@ -2,13 +2,12 @@
 // Redis keys (prefix "lights:"):
 //   state   JSON { v, mode, seq, at, prev }   what the lights do; `at` is the server time it takes effect
 //   n       counter handing out join numbers (1, 2, 3...; odd/even = the two halves)
-//   people  hash  id -> JSON { n, x, y }      seat on the 20 x 20 map of the student section
+//   people  hash  id -> JSON { n, x, y }      spot on the map: x 0..19 across, y 0..9 = the 10 rows
 //   seen    hash  id -> last ping (ms)        who still has the page open
 // Files starting with "_" in /api are not exposed as routes by Vercel.
 const crypto = require('crypto');
 const SEQ = require('../lights/sequences.js');
 
-const GRID = SEQ.GRID;
 const LEAD_MS = 3500;          // a change starts this long after it is pressed, so every phone hears about it in time
 const ACTIVE_MS = 75 * 1000;   // phones ping every 30 s; count a phone as here if we heard from it in the last 75 s
 const TOKEN_HOURS = 12;
@@ -26,10 +25,10 @@ function create(redis, opts) {
     for (let i = 0; i + 1 < v.length; i += 2) o[v[i]] = v[i + 1];
     return o;
   };
-  const seat = (v) => {
+  const seat = (v, size) => {
     if (typeof v !== 'number' && typeof v !== 'string') return null;
     const n = Number(v);
-    return Number.isInteger(n) && n >= 0 && n < GRID ? n : null;
+    return Number.isInteger(n) && n >= 0 && n < size ? n : null;
   };
 
   async function getState() {
@@ -57,7 +56,7 @@ function create(redis, opts) {
 
   // Join (or move seats). A phone that already has an id keeps its number.
   async function join(id, x, y) {
-    x = seat(x); y = seat(y);
+    x = seat(x, SEQ.COLS); y = seat(y, SEQ.ROWS);
     if (x == null || y == null) throw Object.assign(new Error('pick your spot on the map first'), { code: 400 });
     id = typeof id === 'string' && /^[a-f0-9]{24}$/.test(id) ? id : null;
     let n = null;
