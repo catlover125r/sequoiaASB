@@ -11,6 +11,7 @@ function fakeRedis(latencyMs = 0) {
     calls: 0,
     async set(k, v, o = {}) { await wait(); api.calls++; if (o.nx && alive(k)) return null; str.set(k, v); if (o.ex) exp.set(k, Date.now() + o.ex * 1000); return 'OK'; },
     async get(k) { await wait(); api.calls++; return alive(k) ? str.get(k) : null; },
+    async incr(k) { await wait(); api.calls++; const v = (alive(k) ? Number(str.get(k)) : 0) + 1; str.set(k, String(v)); return v; },
     async exists(k) { await wait(); api.calls++; return alive(k) || h.has(k) || s.has(k) || l.has(k) ? 1 : 0; },
     async del(...ks) { await wait(); api.calls++; let n = 0; ks.forEach((k) => { if (str.delete(k) | h.delete(k) | s.delete(k) | l.delete(k)) n++; exp.delete(k); }); return n; },
     async rename(a, b) { await wait(); api.calls++; if (h.has(a)) { h.set(b, h.get(a)); h.delete(a); } return 'OK'; },

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#4a0d67">
+<title>HOCO Flashlights Control</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--purple:#4a0d67;--band:#6a187a;--glow:#c77dff;--card:#1d1622;--line:#33283b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:#0d0a10;color:#fff;min-height:100vh}
+button,input{font:inherit;color:inherit}
+button{border:0;cursor:pointer;touch-action:manipulation}
+.wrap{max-width:980px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) 16px 40px}
+.brand{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--glow);font-weight:700}
+h1{font-size:24px;margin:2px 0 14px}
+h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margin:22px 0 8px;font-weight:700}
+
+/* sign in */
+#login{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;background:linear-gradient(#4a0d67,#160320)}
+#login.on{display:flex}
+#login form{width:100%;max-width:340px;text-align:center}
+#login input{width:100%;padding:14px;border-radius:12px;border:0;background:#fff;color:#000;font-size:17px;margin:16px 0 10px}
+#login button{width:100%;padding:14px;border-radius:12px;background:var(--glow);color:#1a0326;font-weight:800;font-size:17px}
+#loginErr{color:#ffb4b4;min-height:1.3em;margin-top:12px}
+#app{display:none}
+#app.on{display:block}
+
+/* status */
+.status{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.status .now{flex:1;min-width:200px}
+.status .lbl{font-size:12px;opacity:.6;text-transform:uppercase;letter-spacing:1px}
+.status .val{font-size:22px;font-weight:800}
+#pending{font-size:14px;color:#ffd666;min-height:1.2em}
+.count{text-align:center;min-width:76px}
+.count .val{font-size:26px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;margin-right:6px;vertical-align:middle}
+.dot.live{background:#3ddc84;box-shadow:0 0 8px #3ddc84}
+
+/* buttons */
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.qbtn{border-radius:14px;padding:18px 8px;font-size:17px;font-weight:800;background:var(--card);border:2px solid var(--line)}
+.qbtn.on{background:#fff;color:#000}
+.qbtn.split{background:linear-gradient(90deg,#fff 50%,#222 50%)}
+.qbtn.split span{background:#6a187a;color:#fff;border-radius:8px;padding:3px 8px}
+.qbtn.cur{outline:3px solid var(--glow);outline-offset:2px}
+.seqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.seq{display:flex;flex-direction:column;justify-content:flex-start;text-align:left;border-radius:14px;padding:14px;background:var(--card);border:2px solid var(--line)}
+.seq b{font-size:18px;display:block}
+.seq .meta{font-size:12px;opacity:.6;margin:2px 0 6px;text-transform:uppercase;letter-spacing:.8px}
+.seq .d{font-size:14px;opacity:.85;line-height:1.35}
+.seq.cur{border-color:var(--glow);background:#2b1838}
+.seq:active,.qbtn:active{transform:scale(.98)}
+
+/* preview */
+.prevbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tog{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px}
+.tog button{background:none;border-radius:99px;padding:7px 14px;font-size:14px;opacity:.7}
+.tog button.sel{background:var(--band);opacity:1}
+#prevWrap{margin-top:10px;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+#prev{display:block;width:100%;height:auto}
+.note{font-size:13px;opacity:.55;margin-top:6px;line-height:1.4}
+
+/* footer */
+.foot{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.fbtn{border-radius:12px;padding:12px 16px;background:var(--card);border:1px solid var(--line);font-weight:600}
+.fbtn.qr{background:#fff;color:#000}
+.fbtn.danger.arm{background:#b3261e;border-color:#b3261e}
+
+/* QR overlay */
+#qr{display:none;position:fixed;inset:0;background:#fff;color:#000;z-index:50;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+#qr.on{display:flex}
+#qr img{width:min(86vw,72vh);height:auto;image-rendering:pixelated}
+#qr .t{font-size:clamp(22px,5vw,40px);font-weight:900;margin-top:10px}
+#qr .u{font-size:clamp(15px,3vw,22px);opacity:.7}
+#qr .x{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;background:#000;color:#fff;border-radius:99px;padding:10px 18px;font-weight:700}
+#err{color:#ffb4b4;min-height:1.2em;margin-top:8px;font-size:14px}
+</style>
+</head>
+<body>
+
+<section id="login">
+  <form id="loginForm" autocomplete="off">
+    <div class="brand">Sequoia HOCO Flashlights</div>
+    <h1>Control Booth</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" autocapitalize="off" autocorrect="off">
+    <button type="submit">Unlock</button>
+    <div id="loginErr"></div>
+  </form>
+</section>
+
+<section id="app">
+  <div class="wrap">
+    <div class="brand">Sequoia HOCO Flashlights</div>
+    <h1>Control Booth</h1>
+
+    <div class="status">
+      <div class="now">
+        <div class="lbl"><span class="dot" id="liveDot"></span>Phones are showing</div>
+        <div class="val" id="nowName">…</div>
+        <div id="pending"></div>
+      </div>
+      <div class="count"><div class="val" id="cActive">0</div><div class="lbl">here now</div></div>
+      <div class="count"><div class="val" id="cJoined">0</div><div class="lbl">joined</div></div>
+    </div>
+    <div id="err"></div>
+
+    <h2>Lights</h2>
+    <div class="quick">
+      <button class="qbtn on" data-mode="on">ALL ON</button>
+      <button class="qbtn" data-mode="off">ALL OFF</button>
+      <button class="qbtn split" data-mode="split"><span>HALF &amp; HALF</span></button>
+    </div>
+
+    <h2>Shows that work anywhere <span style="text-transform:none;letter-spacing:0;font-weight:400">(loop until you stop them)</span></h2>
+    <div class="seqs" id="seqsAny"></div>
+    <h2>Shows that use the seat map</h2>
+    <div class="seqs" id="seqsSeat"></div>
+
+    <h2>Live preview</h2>
+    <div class="prevbar">
+      <div class="tog" id="prevTog">
+        <button data-v="full" class="sel">Full section</button>
+        <button data-v="real">Real phones</button>
+      </div>
+    </div>
+    <div id="prevWrap"><canvas id="prev" width="806" height="878"></canvas></div>
+    <div class="note">“Full section” pretends every spot on the 20 × 20 grid has a phone. “Real phones” shows the people who joined, where they said they are (grey = page closed). Changes start about 3.5 seconds after you tap, so every phone switches at the same moment.</div>
+
+    <div class="foot">
+      <button class="fbtn qr" id="qrBtn">Show join QR code</button>
+      <button class="fbtn danger" id="resetBtn">Reset everyone's numbers</button>
+      <button class="fbtn" id="logoutBtn">Lock</button>
+    </div>
+  </div>
+</section>
+
+<section id="qr">
+  <button class="x" id="qrClose">Close</button>
+  <img src="/lights/join-qr.svg" alt="QR code for sequoiaasb.org/hocoflights">
+  <div class="t">Scan to join the light show!</div>
+  <div class="u">sequoiaasb.org/hocoflights</div>
+</section>
+
+<script src="/lights/sequences.js"></script>
+<script src="/lights/client.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = 'hocoflights.ctl';
+  var token = null;
+  try { token = localStorage.getItem(KEY); } catch (e) {}
+  var hdr = function () { return { 'x-lights-token': token || '' }; };
+
+  function signedOut() {
+    token = null;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    $('app').classList.remove('on');
+    $('login').classList.add('on');
+    setTimeout(function () { $('pw').focus(); }, 50);
+  }
+  function call(action, body) {
+    return HocoClient.api(action, body, hdr()).catch(function (e) {
+      if (e.status === 401) signedOut();
+      throw e;
+    });
+  }
+
+  $('loginForm').onsubmit = function (ev) {
+    ev.preventDefault();
+    $('loginErr').textContent = '';
+    HocoClient.api('login', { password: $('pw').value }).then(function (r) {
+      token = r.token;
+      try { localStorage.setItem(KEY, token); } catch (e) {}
+      $('pw').value = '';
+      start();
+    }).catch(function (e) {
+      $('loginErr').textContent = e.status === 401 ? 'Wrong password.' : 'Could not sign in (' + e.message + ').';
+    });
+  };
+  $('logoutBtn').onclick = signedOut;
+
+  // ---------------------------------------------------------------- the buttons
+  function seqCard(q) {
+    var b = document.createElement('button');
+    b.className = 'seq';
+    b.dataset.seq = q.id;
+    b.innerHTML = '<b></b><div class="meta"></div><div class="d"></div>';
+    b.querySelector('b').textContent = q.name;
+    b.querySelector('.meta').textContent = Math.round(q.dur / 1000) + ' s loop' + (q.seat ? ' · uses seats' : ' · works anywhere');
+    b.querySelector('.d').textContent = q.desc;
+    b.onclick = function () { setMode('seq', q.id); };
+    return b;
+  }
+  HocoLights.SEQS.forEach(function (q) { $(q.seat ? 'seqsSeat' : 'seqsAny').appendChild(seqCard(q)); });
+  Array.prototype.forEach.call(document.querySelectorAll('.qbtn'), function (b) {
+    b.onclick = function () { setMode(b.dataset.mode); };
+  });
+
+  var state = { mode: 'off' };
+  function setMode(mode, seq) {
+    $('err').textContent = '';
+    call('set', { mode: mode, seq: seq || null }).then(function (s) {
+      delete s.t;
+      state = s;
+      if (watcher) setTimeout(watcher.now, 1200);
+    }).catch(function (e) {
+      if (e.status !== 401) $('err').textContent = 'That didn’t go through (' + e.message + '). Tap again.';
+    });
+  }
+
+  // ---------------------------------------------------------------- status + people
+  var people = { joined: 0, active: 0, people: [] };
+  function loadPeople() {
+    if (!token) return;
+    call('people').then(function (r) {
+      people = r;
+      $('cActive').textContent = r.active;
+      $('cJoined').textContent = r.joined;
+    }).catch(function () {});
+  }
+
+  var lastStatus = '';
+  function paintStatus(now) {
+    var cur = HocoLights.activeState(state, now);
+    var upcoming = state && state.at > now ? state : null;
+    var name = HocoLights.describe(cur);
+    var pend = upcoming ? 'Switching to ' + HocoLights.describe(upcoming) + ' in ' + ((upcoming.at - now) / 1000).toFixed(1) + ' s' : '';
+    var key = name + '|' + pend + '|' + (upcoming ? upcoming.mode + upcoming.seq : cur.mode + cur.seq);
+    if (key === lastStatus) return;
+    lastStatus = key;
+    $('nowName').textContent = name;
+    $('pending').textContent = pend;
+    $('liveDot').classList.toggle('live', cur.mode !== 'off');
+    var target = upcoming || cur;
+    Array.prototype.forEach.call(document.querySelectorAll('.qbtn'), function (b) {
+      b.classList.toggle('cur', target.mode === b.dataset.mode);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.seq'), function (b) {
+      b.classList.toggle('cur', target.mode === 'seq' && target.seq === b.dataset.seq);
+    });
+  }
+
+  // ---------------------------------------------------------------- preview
+  var cv = $('prev'), cx = cv.getContext('2d');
+  var GRID = HocoLights.GRID, SEC = { x: 0, y: 290, w: 806, h: 545 }, CW = SEC.w / GRID, CH = SEC.h / GRID;
+  var prevMode = 'full';
+  try { prevMode = localStorage.getItem(KEY + '.prev') || 'full'; } catch (e) {}
+  function paintTog() {
+    Array.prototype.forEach.call($('prevTog').children, function (b) { b.classList.toggle('sel', b.dataset.v === prevMode); });
+  }
+  paintTog();
+  $('prevTog').onclick = function (ev) {
+    var v = ev.target && ev.target.dataset && ev.target.dataset.v;
+    if (!v) return;
+    prevMode = v; paintTog();
+    try { localStorage.setItem(KEY + '.prev', v); } catch (e) {}
+  };
+  var full = [];
+  for (var yy = 0; yy < GRID; yy++) for (var xx = 0; xx < GRID; xx++) full.push({ n: HocoLights.fakeN(xx, yy), x: xx, y: yy, active: true });
+
+  function drawStatic() {
+    cx.fillStyle = '#29351f'; cx.fillRect(0, 0, 806, 206);
+    cx.fillStyle = '#1c1c1c'; cx.fillRect(0, 206, 806, 84);
+    cx.fillStyle = '#121212'; cx.fillRect(SEC.x, SEC.y, SEC.w, SEC.h);
+    cx.fillStyle = '#2a2a2a'; cx.fillRect(0, 835, 806, 43);
+    cx.fillStyle = 'rgba(255,255,255,.55)';
+    cx.font = '42px Helvetica, Arial, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText('Field', 403, 103);
+    cx.font = '22px Helvetica, Arial, sans-serif';
+    cx.fillText('Fence', 403, 857);
+  }
+  function draw(now) {
+    drawStatic();
+    var list = prevMode === 'full' ? full : people.people;
+    if (prevMode === 'real' && !list.length) {
+      cx.fillStyle = 'rgba(255,255,255,.4)'; cx.font = '30px Helvetica, Arial, sans-serif';
+      cx.fillText('Nobody has joined yet', 403, 562);
+      return;
+    }
+    // several people can share a grid spot: jitter them a little so you can see them all
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      var on = HocoLights.lightAt(state, now, p);
+      var jx = prevMode === 'full' ? 0 : (HocoLights.rnd(p.n, 1) - 0.5) * CW * 0.6;
+      var jy = prevMode === 'full' ? 0 : (HocoLights.rnd(p.n, 2) - 0.5) * CH * 0.6;
+      var px = SEC.x + (p.x + 0.5) * CW + jx, py = SEC.y + (p.y + 0.5) * CH + jy;
+      if (prevMode === 'full') {
+        cx.fillStyle = on ? '#fff' : '#262626';
+        cx.fillRect(SEC.x + p.x * CW + 2, SEC.y + p.y * CH + 2, CW - 4, CH - 4);
+      } else {
+        cx.beginPath();
+        cx.arc(px, py, on ? 9 : 6, 0, Math.PI * 2);
+        cx.fillStyle = !p.active ? '#3a3a3a' : on ? '#fff' : '#5a3a6e';
+        if (on && p.active) { cx.shadowColor = '#fff'; cx.shadowBlur = 18; }
+        cx.fill();
+        cx.shadowBlur = 0;
+      }
+    }
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    if (!token) return;
+    var now = HocoClient.now();
+    paintStatus(now);
+    draw(now);
+  }
+
+  // ---------------------------------------------------------------- reset / QR
+  var armT = null;
+  $('resetBtn').onclick = function () {
+    var b = this;
+    if (!b.classList.contains('arm')) {
+      b.classList.add('arm');
+      b.textContent = 'Tap again to reset everyone';
+      clearTimeout(armT);
+      armT = setTimeout(function () { b.classList.remove('arm'); b.textContent = 'Reset everyone’s numbers'; }, 4000);
+      return;
+    }
+    clearTimeout(armT);
+    b.classList.remove('arm'); b.textContent = 'Reset everyone’s numbers';
+    call('reset', {}).then(loadPeople).catch(function (e) { $('err').textContent = 'Reset failed (' + e.message + ').'; });
+  };
+  $('qrBtn').onclick = function () { $('qr').classList.add('on'); };
+  $('qrClose').onclick = function () { $('qr').classList.remove('on'); };
+
+  // ---------------------------------------------------------------- go
+  var watcher = null, started = false;
+  function start() {
+    $('login').classList.remove('on');
+    $('app').classList.add('on');
+    loadPeople();
+    if (started) return;
+    started = true;
+    HocoClient.syncClock(5);
+    watcher = HocoClient.watchState(function (s) { if (!state.v || (s.v || 0) >= state.v) state = s; }, 1500);   // ignore an older copy from the CDN
+    setInterval(loadPeople, 3000);
+    setInterval(function () { HocoClient.syncClock(2); }, 60000);
+    requestAnimationFrame(frame);
+  }
+  if (token) start(); else signedOut();
+})();
+</script>
+</body>
+</html>

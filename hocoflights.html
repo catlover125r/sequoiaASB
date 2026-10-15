@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#000000">
+<title>HOCO Flashlights</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--purple:#4a0d67;--band:#6a187a;--glow:#c77dff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:#000;color:#fff;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation}
+.view{display:none;position:fixed;inset:0;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+.view.on{display:flex}
+@media (min-width:600px){.view:not(#show){left:50%;right:auto;width:560px;transform:translateX(-50%)}}
+.brand{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--glow);font-weight:700;text-align:center;margin:0 0 4px}
+h1{font-size:23px;line-height:1.15;margin:0 0 6px;text-align:center}
+.sub{font-size:15px;opacity:.8;text-align:center;margin:0 0 12px;line-height:1.35}
+.step{display:inline-block;background:var(--band);border-radius:99px;font-size:12px;font-weight:700;padding:3px 10px;margin-bottom:8px;letter-spacing:.5px}
+.center{text-align:center}
+.big{display:block;width:100%;border-radius:14px;padding:16px;font-size:18px;font-weight:700;background:#fff;color:#000;margin-top:10px}
+.big:disabled{opacity:.3}
+.big.purple{background:var(--glow);color:#1a0326}
+.link{background:none;color:#fff;opacity:.75;text-decoration:underline;font-size:15px;padding:12px;display:block;margin:2px auto 0}
+.err{color:#ff9a9a;text-align:center;min-height:1.3em;font-size:15px;margin:8px 0 0}
+
+/* ---- step 1: seat map ---- */
+#pick .mapwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+#map{width:100%;height:100%;max-height:100%;touch-action:none;display:block}
+#map .sec{cursor:crosshair}
+#gridlines{opacity:0;transition:opacity .2s}
+#map.dragging #gridlines,#map.placed #gridlines{opacity:1}
+#me{transition:transform .18s ease-out}
+#map.dragging #me{transition:none}
+#hint{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+#seattxt{text-align:center;font-size:14px;opacity:.75;min-height:1.3em;margin-top:6px}
+
+/* ---- step 2: flashlight ---- */
+#perm{justify-content:center}
+.icon{font-size:64px;text-align:center;line-height:1;margin-bottom:10px}
+.test{display:none}
+.test.on{display:block}
+.row{display:flex;gap:10px}
+.row .big{margin-top:12px}
+.row .big.no{background:#333;color:#fff}
+
+/* ---- the show ---- */
+#show{padding:0;background:#000}
+#glow{position:absolute;inset:0;background:#000}
+#glow.lit{background:#fff}
+#info{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 22px max(20px,env(safe-area-inset-bottom));text-align:center;transition:opacity .15s}
+#glow.lit + #info{opacity:0}
+#info.dim{opacity:.22}
+#num{font-size:84px;font-weight:800;line-height:1;margin:6px 0 2px;color:var(--glow)}
+#numlbl{font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.6}
+#now{margin-top:18px;font-size:16px;opacity:.85}
+#tips{margin-top:18px;font-size:15px;line-height:1.45;opacity:.75;max-width:330px}
+#tips b{color:#fff}
+#tools{position:absolute;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom));display:flex;justify-content:center;gap:4px;flex-wrap:wrap}
+#tools .link{font-size:13px;padding:8px 10px;margin:0}
+#banner{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:#5a1414;color:#fff;border-radius:12px;padding:12px 14px;font-size:15px;display:none;text-align:center}
+#banner.on{display:block}
+#banner button{background:#fff;color:#000;border-radius:99px;padding:8px 16px;margin-top:8px;font-weight:700}
+video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0}
+</style>
+</head>
+<body>
+
+<!-- ======================== 1. where are you? ======================== -->
+<section class="view on" id="pick">
+  <div class="brand">Sequoia HOCO Flashlights</div>
+  <div class="center"><span class="step">STEP 1 OF 2</span></div>
+  <h1>Where are you standing?</h1>
+  <p class="sub">Drag the dot to your spot in the student section so you can be part of the big designs.</p>
+  <div class="mapwrap">
+    <svg id="map" viewBox="0 0 806 878" preserveAspectRatio="xMidYMid meet" aria-label="Map of the student section">
+      <rect x="0" y="0" width="806" height="206" fill="#bdd6ab"/>
+      <text x="403" y="118" font-size="46" text-anchor="middle" fill="#000" font-family="Helvetica, Arial, sans-serif">Field</text>
+      <rect x="0" y="206" width="806" height="84" fill="#b7b7b7"/>
+      <rect class="sec" x="0" y="290" width="806" height="545" fill="#d9d9d9"/>
+      <g id="gridlines" stroke="#000" stroke-opacity=".08" stroke-width="1.2"></g>
+      <rect id="cellhl" x="0" y="0" width="0" height="0" fill="#4a0d67" fill-opacity=".18" style="display:none"/>
+      <text id="sectxt" x="403" y="578" font-size="46" text-anchor="middle" fill="#000" font-family="Helvetica, Arial, sans-serif" pointer-events="none">Student Section</text>
+      <text id="hint" x="403" y="640" font-size="30" text-anchor="middle" fill="#4a0d67" font-weight="700" font-family="Helvetica, Arial, sans-serif" pointer-events="none">Tap where you are</text>
+      <rect x="0" y="835" width="806" height="43" fill="#999"/>
+      <text x="403" y="866" font-size="24" text-anchor="middle" fill="#000" font-family="Helvetica, Arial, sans-serif">Fence</text>
+      <g id="me" style="display:none" pointer-events="none">
+        <circle r="34" fill="#4a0d67" fill-opacity=".22"/>
+        <circle r="19" fill="#4a0d67" stroke="#fff" stroke-width="5"/>
+        <text y="-42" font-size="26" font-weight="800" text-anchor="middle" fill="#4a0d67" font-family="Helvetica, Arial, sans-serif">YOU</text>
+      </g>
+    </svg>
+  </div>
+  <div id="seattxt"></div>
+  <button class="big" id="next" disabled>Next</button>
+</section>
+
+<!-- ======================== 2. flashlight ======================== -->
+<section class="view" id="perm">
+  <div class="brand">Sequoia HOCO Flashlights</div>
+  <div class="center"><span class="step">STEP 2 OF 2</span></div>
+  <div id="permAsk">
+    <div class="icon">🔦</div>
+    <h1 id="permTitle">Let us run your flashlight</h1>
+    <p class="sub">Tap the button, then tap <b>Allow</b> when your phone asks about the camera. We only use it to turn the flashlight on and off. Nothing is recorded or sent anywhere.</p>
+    <button class="big purple" id="joinBtn">Join the light show</button>
+    <button class="link" id="back1">Change my spot</button>
+  </div>
+  <div class="test" id="permTest">
+    <div class="icon">✨</div>
+    <h1>Did your flashlight just flash?</h1>
+    <p class="sub">Look at the back of your phone.</p>
+    <div class="row">
+      <button class="big no" id="testNo">No</button>
+      <button class="big purple" id="testYes">Yes!</button>
+    </div>
+    <button class="link" id="testAgain">Flash it again</button>
+  </div>
+  <p class="err" id="permErr"></p>
+</section>
+
+<!-- ======================== 3. the show ======================== -->
+<section class="view" id="show">
+  <div id="glow"></div>
+  <div id="info">
+    <div id="numlbl">You're number</div>
+    <div id="num">–</div>
+    <div id="now">Waiting for the show…</div>
+    <div id="tips"></div>
+  </div>
+  <div id="banner"></div>
+  <div id="tools">
+    <button class="link" id="moveBtn">Move my spot</button>
+    <button class="link" id="modeBtn">Use my screen instead</button>
+  </div>
+</section>
+<video id="cam" playsinline muted autoplay></video>
+
+<script src="/lights/sequences.js"></script>
+<script src="/lights/client.js"></script>
+<script>
+(function () {
+  'use strict';
+  var GRID = HocoLights.GRID;
+  var SEC = { x: 0, y: 290, w: 806, h: 545 };
+  var CW = SEC.w / GRID, CH = SEC.h / GRID;
+  var KEY = 'hocoflights.v1';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------------------------------------------------------- saved info (survives reloads)
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }
+
+  function show(id) {
+    ['pick', 'perm', 'show'].forEach(function (v) { $(v).classList.toggle('on', v === id); });
+  }
+
+  // ---------------------------------------------------------------- step 1: the map
+  var map = $('map'), me = $('me'), seat = null;   // seat = { x, y } in grid cells
+  (function drawGrid() {
+    var g = $('gridlines'), s = '';
+    for (var i = 1; i < GRID; i++) {
+      s += '<line x1="' + (SEC.x + i * CW) + '" y1="' + SEC.y + '" x2="' + (SEC.x + i * CW) + '" y2="' + (SEC.y + SEC.h) + '"/>';
+      s += '<line x1="' + SEC.x + '" y1="' + (SEC.y + i * CH) + '" x2="' + (SEC.x + SEC.w) + '" y2="' + (SEC.y + i * CH) + '"/>';
+    }
+    g.innerHTML = s;
+  })();
+
+  function svgPoint(ev) {
+    var pt = map.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    return pt.matrixTransform(map.getScreenCTM().inverse());
+  }
+  function clampToSection(p) {
+    return { x: Math.min(SEC.x + SEC.w - 1, Math.max(SEC.x + 1, p.x)), y: Math.min(SEC.y + SEC.h - 1, Math.max(SEC.y + 1, p.y)) };
+  }
+  function inSection(p) { return p.x >= SEC.x && p.x <= SEC.x + SEC.w && p.y >= SEC.y && p.y <= SEC.y + SEC.h; }
+  function cellOf(p) {
+    return { x: Math.min(GRID - 1, Math.floor((p.x - SEC.x) / CW)), y: Math.min(GRID - 1, Math.floor((p.y - SEC.y) / CH)) };
+  }
+  function cellCentre(c) { return { x: SEC.x + (c.x + 0.5) * CW, y: SEC.y + (c.y + 0.5) * CH }; }
+  function putDot(p) {
+    me.style.display = '';
+    me.setAttribute('transform', 'translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ')');
+    var c = cellOf(p), hl = $('cellhl');
+    hl.style.display = '';
+    hl.setAttribute('x', SEC.x + c.x * CW); hl.setAttribute('y', SEC.y + c.y * CH);
+    hl.setAttribute('width', CW); hl.setAttribute('height', CH);
+  }
+  function describeSeat(c) {
+    var row = c.y + 1;
+    var side = c.x < 7 ? 'left side' : c.x > 12 ? 'right side' : 'middle';
+    return 'Row ' + row + ' from the front · ' + side;
+  }
+  function setSeat(c) {
+    seat = c;
+    putDot(cellCentre(c));
+    $('hint').style.display = 'none';
+    $('sectxt').setAttribute('opacity', '.25');
+    map.classList.add('placed');
+    $('seattxt').textContent = describeSeat(c);
+    $('next').disabled = false;
+  }
+
+  var dragging = false;
+  map.addEventListener('pointerdown', function (ev) {
+    var p = svgPoint(ev);
+    if (!inSection(p)) return;        // only the student section counts
+    dragging = true;
+    map.classList.add('dragging');
+    try { map.setPointerCapture(ev.pointerId); } catch (e) {}
+    putDot(clampToSection(p));
+    $('hint').style.display = 'none';
+    ev.preventDefault();
+  });
+  map.addEventListener('pointermove', function (ev) {
+    if (!dragging) return;
+    putDot(clampToSection(svgPoint(ev)));
+    ev.preventDefault();
+  });
+  function endDrag(ev) {
+    if (!dragging) return;
+    dragging = false;
+    map.classList.remove('dragging');
+    setSeat(cellOf(clampToSection(svgPoint(ev))));   // snap to the 20 x 20 grid
+  }
+  map.addEventListener('pointerup', endDrag);
+  map.addEventListener('pointercancel', endDrag);
+
+  if (typeof saved.x === 'number' && typeof saved.y === 'number') setSeat({ x: saved.x, y: saved.y });
+
+  $('next').onclick = function () {
+    if (!seat) return;
+    saved.x = seat.x; saved.y = seat.y; save();
+    $('permTitle').textContent = saved.n ? 'Welcome back, #' + saved.n + '!' : 'Let us run your flashlight';
+    show('perm');
+  };
+  $('back1').onclick = function () { show('pick'); };
+
+  // ---------------------------------------------------------------- the flashlight
+  var stream = null, track = null;
+  var torch = { ok: false, want: false, is: null, busy: false, lat: 120 };   // lat = how long a switch takes (ms)
+
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    stream = null; track = null; torch.is = null;
+  }
+  function hasTorch(t) {
+    try { var c = t.getCapabilities && t.getCapabilities(); return !!(c && c.torch); } catch (e) { return false; }
+  }
+  async function openCamera() {
+    stopCamera();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+    });
+    track = stream.getVideoTracks()[0];
+    // phones with several back cameras: find the one with the flash
+    if (!hasTorch(track) && navigator.mediaDevices.enumerateDevices) {
+      try {
+        var devs = (await navigator.mediaDevices.enumerateDevices()).filter(function (d) {
+          return d.kind === 'videoinput' && d.deviceId && !/front|user|face/i.test(d.label);
+        });
+        for (var i = 0; i < devs.length && !hasTorch(track); i++) {
+          if (track.getSettings && track.getSettings().deviceId === devs[i].deviceId) continue;
+          var s2 = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: devs[i].deviceId }, width: { ideal: 640 } } });
+          var t2 = s2.getVideoTracks()[0];
+          if (hasTorch(t2)) { stopCamera(); stream = s2; track = t2; }
+          else s2.getTracks().forEach(function (t) { t.stop(); });
+        }
+      } catch (e) { /* keep the first camera */ }
+    }
+    var v = $('cam');
+    v.srcObject = stream;
+    try { await v.play(); } catch (e) {}
+    track.addEventListener('ended', function () { if (saved.mode === 'torch') cameraLost(); });
+  }
+  async function setTorchNow(on) {
+    if (!track) throw new Error('no camera');
+    await track.applyConstraints({ advanced: [{ torch: !!on }] });
+  }
+  // Switch the torch, never more than one request at a time; always ends on the latest wish.
+  async function pushTorch() {
+    if (torch.busy || !track || !torch.ok || torch.want === torch.is) return;
+    torch.busy = true;
+    var want = torch.want, t0 = performance.now();
+    try {
+      await setTorchNow(want);
+      torch.is = want;
+      torch.lat = Math.min(250, torch.lat * 0.8 + (performance.now() - t0) * 0.2);
+    } catch (e) {
+      torch.is = null;
+    }
+    torch.busy = false;
+    if (torch.want !== torch.is && track) setTimeout(pushTorch, torch.is === null ? 300 : 0);
+  }
+  function wantTorch(on) { torch.want = on; pushTorch(); }
+
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  async function testFlash() {
+    for (var i = 0; i < 2; i++) {
+      await setTorchNow(true); await sleep(450);
+      await setTorchNow(false); await sleep(300);
+    }
+  }
+
+  // ---------------------------------------------------------------- joining
+  async function joinServer() {
+    var r = await HocoClient.api('join', { id: saved.id || null, x: seat.x, y: seat.y });
+    saved.id = r.id; saved.n = r.n; saved.x = r.x; saved.y = r.y; save();
+    return r;
+  }
+
+  $('joinBtn').onclick = async function () {
+    var btn = this;
+    btn.disabled = true;
+    $('permErr').textContent = '';
+    btn.textContent = 'Joining…';
+    keepAwake();
+    var camErr = null;
+    try {
+      await joinServer();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Join the light show';
+      $('permErr').textContent = 'Could not reach the light show (' + e.message + '). Check your signal and try again.';
+      return;
+    }
+    if (saved.mode === 'screen') { startShow(); return; }
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('unsupported');
+      await openCamera();
+      await testFlash();
+    } catch (e) { camErr = e; }
+    btn.disabled = false; btn.textContent = 'Join the light show';
+    if (camErr) {
+      stopCamera();
+      saved.mode = 'screen'; save();
+      startShow(camErr.name === 'NotAllowedError'
+        ? 'Camera access was blocked, so your <b>screen</b> will light up instead.'
+        : 'This phone/browser can’t control the flashlight, so your <b>screen</b> will light up instead.');
+      return;
+    }
+    $('permAsk').style.display = 'none';
+    $('permTest').classList.add('on');
+  };
+  $('testAgain').onclick = function () { testFlash().catch(function () {}); };
+  $('testYes').onclick = function () {
+    saved.mode = 'torch'; save();
+    torch.ok = true;
+    resetPermView();
+    startShow();
+  };
+  $('testNo').onclick = function () {
+    stopCamera();
+    saved.mode = 'screen'; save();
+    resetPermView();
+    startShow('No problem: your <b>screen</b> will light up instead.');
+  };
+  function resetPermView() { $('permAsk').style.display = ''; $('permTest').classList.remove('on'); }
+
+  // ---------------------------------------------------------------- the show
+  var state = { mode: 'off' }, running = false, lit = null, lastShowName = '';
+  var glow = $('glow');
+
+  function tips(extra) {
+    var t = saved.mode === 'torch'
+      ? 'Hold your phone <b>up high</b> with the flashlight toward the field.'
+      : 'Turn your <b>brightness all the way up</b> and hold your phone up with the <b>screen facing the field</b>.';
+    $('tips').innerHTML = (extra ? extra + '<br><br>' : '') + t + '<br>Keep this page open and your screen on.';
+    $('modeBtn').textContent = saved.mode === 'torch' ? 'Use my screen instead' : 'Try the flashlight';
+  }
+
+  function startShow(note) {
+    show('show');
+    $('num').textContent = '#' + saved.n;
+    tips(note);
+    if (!running) {
+      running = true;
+      HocoClient.syncClock(6);
+      HocoClient.watchState(function (s) { state = s; });
+      setInterval(heartbeat, 30000);
+      requestAnimationFrame(frame);
+    }
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    var now = HocoClient.now();
+    var me = { n: saved.n || 1, x: saved.x || 0, y: saved.y || 0 };
+    var on = HocoLights.lightAt(state, now, me);
+    if (on !== lit) { lit = on; glow.classList.toggle('lit', on); }
+    if (saved.mode === 'torch' && torch.ok) wantTorch(HocoLights.lightAt(state, now + torch.lat, me));
+    // while a show runs, keep the words faint so the section stays dark
+    var active = HocoLights.activeState(state, now);
+    var name = active.mode === 'off' ? 'Waiting for the show…' : 'Now: ' + HocoLights.describe(active);
+    if (name !== lastShowName) {
+      lastShowName = name;
+      $('now').textContent = name;
+      $('info').classList.toggle('dim', active.mode !== 'off');
+      $('tools').style.display = active.mode !== 'off' ? 'none' : '';
+    }
+  }
+
+  // every 30 s: "still here" + another clock sample. Unknown phone (the control page reset everyone) -> join again.
+  function heartbeat() {
+    if (document.hidden || !saved.id) return;
+    HocoClient.sample(function () { return HocoClient.api('ping', { id: saved.id }); }).then(function (r) {
+      if (r && r.ok === false) {
+        saved.id = null; save();
+        return joinServer().then(function () { $('num').textContent = '#' + saved.n; });
+      }
+    }).catch(function () {});
+  }
+
+  // ---------------------------------------------------------------- keep the screen on / come back from the background
+  var wake = null;
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator && !wake && !document.hidden) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', function () { wake = null; }); } } catch (e) {}
+  }
+  function banner(html, btnText, onBtn) {
+    var b = $('banner');
+    if (!html) { b.classList.remove('on'); return; }
+    b.innerHTML = html + (btnText ? '<br><button>' + btnText + '</button>' : '');
+    if (btnText) b.querySelector('button').onclick = onBtn;
+    b.classList.add('on');
+  }
+  function cameraLost() {
+    torch.ok = false; track = null;
+    if (!running) return;
+    banner('Your flashlight disconnected.', 'Reconnect flashlight', function () {
+      openCamera().then(function () { torch.ok = true; torch.is = null; banner(null); }).catch(function () {
+        banner('Couldn’t reconnect the flashlight. Your screen will still light up.', 'Try again', cameraLost);
+      });
+    });
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !running) return;
+    keepAwake();
+    HocoClient.syncClock(3);
+    heartbeat();
+    if (saved.mode === 'torch' && (!track || track.readyState !== 'live')) cameraLost();
+  });
+
+  $('moveBtn').onclick = function () { show('pick'); };
+  $('modeBtn').onclick = function () {
+    if (saved.mode === 'torch') {
+      wantTorch(false);
+      setTimeout(stopCamera, 400);
+      torch.ok = false;
+      saved.mode = 'screen'; save();
+      tips();
+    } else {
+      saved.mode = null; save();
+      show('perm');
+    }
+  };
+
+  // back again (page reloaded / reopened): skip to the flashlight step with the saved spot
+  if (saved.id && seat) {
+    $('permTitle').textContent = 'Welcome back, #' + saved.n + '!';
+    show('perm');
+  }
+})();
+</script>
+</body>
+</html>

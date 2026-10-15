@@ -7,6 +7,18 @@
       "destination": "/api/ticket?c=:code"
     }
   ],
+  "redirects": [
+    {
+      "source": "/hocofblights",
+      "destination": "/hocoflights",
+      "permanent": false
+    },
+    {
+      "source": "/hocofblightscontrol",
+      "destination": "/hocoflightscontrol",
+      "permanent": false
+    }
+  ],
   "regions": [
     "sfo1"
   ],
@@ -31,6 +43,32 @@
     },
     {
       "source": "/hocorallymusic",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/hocoflights",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/hocoflightscontrol",
       "headers": [
         {
           "key": "X-Robots-Tag",
