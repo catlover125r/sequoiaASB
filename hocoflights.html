@@ -44,11 +44,6 @@ h1{font-size:23px;line-height:1.15;margin:0 0 6px;text-align:center}
 /* ---- step 2: flashlight ---- */
 #perm{justify-content:center}
 .icon{font-size:64px;text-align:center;line-height:1;margin-bottom:10px}
-.test{display:none}
-.test.on{display:block}
-.row{display:flex;gap:10px}
-.row .big{margin-top:12px}
-.row .big.no{background:#333;color:#fff}
 
 /* ---- the show ---- */
 #show{padding:0;background:#000}
@@ -111,16 +106,6 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
     <p class="sub">Tap the button, then tap <b>Allow</b> when your phone asks about the camera. We only use it to turn the flashlight on and off. Nothing is recorded or sent anywhere.</p>
     <button class="big purple" id="joinBtn">Join the light show</button>
     <button class="link" id="back1">Change my spot</button>
-  </div>
-  <div class="test" id="permTest">
-    <div class="icon">✨</div>
-    <h1>Did your flashlight just flash?</h1>
-    <p class="sub">Look at the back of your phone.</p>
-    <div class="row">
-      <button class="big no" id="testNo">No</button>
-      <button class="big purple" id="testYes">Yes!</button>
-    </div>
-    <button class="link" id="testAgain">Flash it again</button>
   </div>
   <p class="err" id="permErr"></p>
 </section>
@@ -304,11 +289,10 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
   function wantTorch(on) { torch.want = on; pushTorch(); }
 
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  // one quick flash: shows it worked, and throws right away on phones that can't control the flashlight
   async function testFlash() {
-    for (var i = 0; i < 2; i++) {
-      await setTorchNow(true); await sleep(450);
-      await setTorchNow(false); await sleep(300);
-    }
+    await setTorchNow(true); await sleep(300);
+    await setTorchNow(false);
   }
 
   // ---------------------------------------------------------------- joining
@@ -347,23 +331,11 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:
         : 'This phone/browser can’t control the flashlight, so your <b>screen</b> will light up instead.');
       return;
     }
-    $('permAsk').style.display = 'none';
-    $('permTest').classList.add('on');
-  };
-  $('testAgain').onclick = function () { testFlash().catch(function () {}); };
-  $('testYes').onclick = function () {
+    // straight into the show (the screen lights up too, so a phone whose flashlight silently ignores us still joins in)
     saved.mode = 'torch'; save();
-    torch.ok = true;
-    resetPermView();
+    torch.ok = true; torch.is = false;
     startShow();
   };
-  $('testNo').onclick = function () {
-    stopCamera();
-    saved.mode = 'screen'; save();
-    resetPermView();
-    startShow('No problem: your <b>screen</b> will light up instead.');
-  };
-  function resetPermView() { $('permAsk').style.display = ''; $('permTest').classList.remove('on'); }
 
   // ---------------------------------------------------------------- the show
   var state = { mode: 'off' }, running = false, lit = null, lastShowName = '';
