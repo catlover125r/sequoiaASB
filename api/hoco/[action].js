@@ -84,14 +84,16 @@ module.exports = async (req, res) => {
       const id = H.normId((req.body || {}).id);
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
       housekeeping(store);
-      if (store.fast) return send(res, 200, await store.checkin(id, user.email));   // atomic, a few ms
+      // agreementConfirmed: the helper tapped "Dance Agreement completed" on the yellow screen
+      const confirmed = (req.body || {}).agreementConfirmed === true;
+      if (store.fast) return send(res, 200, await store.checkin(id, user.email, { agreementConfirmed: confirmed }));   // atomic, a few ms
       // Instant "no ticket": if our recent copy of the roster doesn't have this ID, don't bother the sheet.
       // (We never answer "already checked in" from the copy: the sheet decides that, so an undo is never missed.)
       if (H.rosterAgeMs() < 90 * 1000) {
         try {
           const byId = await H.getRoster(store), t = byId.get(id);
           if (!t) return send(res, 200, { result: 'no_ticket' });
-          if (t.agreed === false && !t.checkedIn) return send(res, 200, { result: 'no_agreement', name: t.name });   // dance agreement not signed
+          if (t.agreed === false && !t.checkedIn && !confirmed) return send(res, 200, { result: 'no_agreement', name: t.name });   // dance agreement not signed
         } catch (e) { /* fall through to the sheet */ }
       }
       const r = await store.checkin(id, user.email);
