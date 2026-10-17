@@ -164,12 +164,19 @@ function create(redis, sheet, hooks, opts) {
     return { result: 'no_agreement', name: r.name };
   }
 
-  async function checkin(id, by) {
+  // opts.agreementConfirmed: a helper at the door says the student's Dance Agreement is done (the form isn't linked to the sheet
+  // in real time), so the hold is skipped. It is recorded on the check-in and in the log so it can be audited.
+  async function checkin(id, by, opts) {
+    const confirmed = !!(opts && opts.agreementConfirmed);
     const r = await rosterEntry(id);
     if (!r) return { result: 'no_ticket' };
-    const hold = await agreementHold(id, r);
-    if (hold) return hold;
+    if (!confirmed) {
+      const hold = await agreementHold(id, r);
+      if (hold) return hold;
+    }
+    const staffOk = confirmed && r.agreed === false;     // only note it when the hold would really have applied
     const rec = { at: new Date().toISOString(), by };
+    if (staffOk) rec.agr = 'staff';
     const won = await redis.hsetnx(R_CI, id, JSON.stringify(rec));     // atomic: only one caller can win
     if (!won) {
       const prev = parse(await redis.hget(R_CI, id));
@@ -177,7 +184,7 @@ function create(redis, sheet, hooks, opts) {
     }
     await Promise.all([
       redis.sadd(R_DIRTY, id),
-      redis.rpush(R_EVENTS, JSON.stringify({ t: rec.at, a: 'CHECK IN', id, name: r.name, by })),
+      redis.rpush(R_EVENTS, JSON.stringify({ t: rec.at, a: staffOk ? 'CHECK IN (agreement confirmed by staff)' : 'CHECK IN', id, name: r.name, by })),
     ]);
     bg(pushSoon());
     return r.guest ? { result: 'ok', name: r.name, guest: r.guest } : { result: 'ok', name: r.name };

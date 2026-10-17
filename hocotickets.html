@@ -60,6 +60,9 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 #pop.warn{background:var(--warn);color:#1b1b1f}
 #pop.warn .t{font-size:clamp(26px,7vw,44px)}
 #pop.warn .nm{margin-top:6px;font-size:clamp(20px,5.5vw,30px);font-weight:700}
+#agreeBtn{display:none;margin:18px auto 0;padding:15px 22px;max-width:92%;border:0;border-radius:14px;background:#1b1b1f;color:#fff;font:inherit;font-size:clamp(17px,4.6vw,22px);font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+#pop.warn #agreeBtn{display:inline-block}
+#agreeBtn:active{transform:scale(.98)}
 #popQr{display:none;width:min(62vw,36vh,300px);height:min(62vw,36vh,300px);margin:16px auto 0;background:#fff;padding:10px;border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.25)}
 #pop.warn #popQr{display:block}
 #pop .t{font-size:clamp(30px,8vw,56px);font-weight:700;line-height:1.2}
@@ -130,7 +133,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   <div id="dlg"><div class="box"><p id="dlgT"></p><div class="btns"><button id="dlgNo" class="pill">Cancel</button><button id="dlgYes" class="pill danger">Undo check-in</button></div></div></div>
 </div>
 
-<div id="pop"><div><div class="t" id="popT"></div><img id="popQr" src="/dance-agreement-qr.svg" alt="QR code for the Student Dance Agreement"><div class="s" id="popS"></div></div><div class="tap">Tap anywhere to continue</div></div>
+<div id="pop"><div><div class="t" id="popT"></div><img id="popQr" src="/dance-agreement-qr.svg" alt="QR code for the Student Dance Agreement"><div class="s" id="popS"></div><button type="button" id="agreeBtn">Dance Agreement completed &mdash; Check in</button></div><div class="tap">Tap anywhere to continue</div></div>
 
 <script src="/vendor/zxing-reader.iife.js"></script>
 <script>
@@ -222,7 +225,11 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     if (navigator.vibrate) navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]);
   }
   var lastId = null;
-  $('#pop').onclick = function () {
+  $('#pop').onclick = function (e) {
+    if (e && e.target && e.target.id === 'agreeBtn') {       // the helper says the Dance Agreement is done: check the student in anyway
+      if (Date.now() - popAt <= 350 || !heldFor) return;
+      var id = heldFor; this.style.display = 'none'; if (window.holdOff) window.holdOff(id, 3000); checkIn(id, true); return;
+    }
     if (Date.now() - popAt <= 350) return;
     this.style.display = 'none';
     if (lastId && window.holdOff) window.holdOff(lastId, 2000);   // the same barcode is usually still in front of the camera
@@ -231,9 +238,11 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   function nameCase(s) { return String(s).trim().replace(/(^|[\s-])([a-z])/g, function (m, a, c) { return a + c.toUpperCase(); }); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  function checkIn(raw) {
+  var heldFor = null;     // the student ID shown on the yellow "agreement needed" screen
+  function checkIn(raw, agreementConfirmed) {
     lastId = String(raw).replace(/\D/g, '');
-    return api('checkin', { id: raw }).then(function (r) {
+    heldFor = null;
+    return api('checkin', agreementConfirmed ? { id: raw, agreementConfirmed: true } : { id: raw }).then(function (r) {
       if (r.status === 401) { signedOut('Please sign in again.'); return; }
       if (r.status !== 200) { pop('bad', 'Something went wrong', r.body.error === 'not_connected' ? 'The ticket list is not connected yet.' : 'Please try again.'); return; }
       var b = r.body;
@@ -242,7 +251,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
         var guest = b.guest ? '<span class="guest"><small>Has a guest</small><b>' + esc(nameCase(b.guest)) + '</b></span>' : '';
         pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, have a great hoco.' + guest); clearKeys();
       }
-      else if (b.result === 'no_agreement') pop('warn', '', 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Do not check in yet</div>');
+      else if (b.result === 'no_agreement') { heldFor = lastId; pop('warn', '', 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Not checked in yet</div>'); }
       else if (b.result === 'already') pop('bad', 'Already checked in', b.name || '');
       else if (b.result === 'no_ticket') pop('bad', 'No ticket', '');
       else pop('bad', 'Something went wrong', 'Reload this page and try again.');   // a result this (older) page does not know
