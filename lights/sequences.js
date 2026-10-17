@@ -47,36 +47,61 @@
   var ON = function () { return true; }, OFF = function () { return false; };
 
   // ------------------------------------------------------------------ sequences that work anywhere
+  // A phone flashlight is only on or off, so a fade is done across the crowd instead: at brightness 0.3,
+  // 3 in 10 phones are on (each phone has its own fixed place in line, rnd(n, salt), so as the level rises
+  // more phones join and nobody flickers). Levels move in steps of FADE ms, so every phone stays on or off
+  // at least that long. Part lengths are multiples of FADE (or of 300 for the star parts) for the same reason.
+  var FADE = 200;
+  function q(t) { return Math.floor(t / FADE) * FADE; }
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function ramp(t, a, b) { return clamp01((t - a) / (b - a)); }   // 0 before a, 1 after b, a straight line between
+  function level(p, lv, salt) { return rnd(p.n, salt) < lv; }
+  // fade up over `up` ms, stay full for `hold`, fade down over `down`, then dark
+  function swell(t, up, hold, down) { return t < up ? ramp(t, 0, up) : t < up + hold ? 1 : 1 - ramp(t, up + hold, up + hold + down); }
+  // a light that hits full and dies away over `ms` (a heartbeat thump)
+  function thump(t, peak, ms) { return t < 0 ? 0 : peak * (1 - ramp(t, 0, ms)); }
+  var group = function (p, k) { return (p.n - 1) % k; };          // split everyone into k groups by join number
+
   var heartbeat = parts([
-    [8000, function (t) { return blink(t, 2000); }],                                   // slow: 1 s on, 1 s off
-    [6000, function (t) { return blink(t, 1000); }],                                   // faster
-    [6000, function (t) { var m = mod(t, 1500); return m < 160 || (m >= 330 && m < 490); }], // lub-dub heartbeat
-    [2400, function (t) { return blink(t, 400); }],                                    // quick flashes
-    [1600, ON],                                                                         // everybody on
-    [800, OFF],
+    // breathing: the whole section slowly fades up and down, twice
+    [8000, function (t, p) { return level(p, swell(q(t) % 4000, 1600, 400, 1600), 11); }],
+    // lub-dub: a big thump that dies away, then a softer one
+    [6000, function (t, p) { var m = q(t) % 1500; return level(p, Math.max(thump(m, 1, 400), thump(m - 600, 0.7, 400)), 12); }],
+    // the heart speeds up: a thump every 0.6 s
+    [4800, function (t, p) { return level(p, thump(q(t) % 600, 1, 400), 13); }],
+    // one long swell up to everyone on...
+    [3200, function (t, p) { return level(p, ramp(q(t), 0, 2400), 14); }],
+    // ...and a slow fade to black
+    [2400, function (t, p) { return level(p, 1 - ramp(q(t), 0, 2000), 15); }],
   ]);
 
-  var oddEven = parts([
-    [8000, function (t, p) { return blink(t, 2000) === odd(p); }],     // halves trade places every second
-    [6000, function (t, p) { return blink(t, 1000) === odd(p); }],     // every half second
-    [3600, function (t, p) { return blink(t, 600) === odd(p); }],      // faster
-    [2000, ON],                                                          // everyone together
-    [1000, OFF],
-    [3000, function (t, p) { return t < 1000 ? odd(p) : t < 2000 ? !odd(p) : true; }], // odd, even, ALL
-    [1000, OFF],
+  var groups = parts([
+    // odd and even cross-fade: the light slides from one half to the other and back, twice
+    [8000, function (t, p) { var s = swell(q(t) % 4000, 1600, 400, 1600); return level(p, odd(p) ? s : 1 - s, 21); }],
+    // thirds: the light rolls through three groups, each fading in as the last fades out
+    [6000, function (t, p) {
+      var d = Math.abs(mod(q(t) - group(p, 3) * 1000 + 1500, 3000) - 1500);   // ms away from this group's turn
+      return level(p, ramp(-d, -1200, -200), 22);
+    }],
+    // count off 1-2-3-4: a quarter of the section at a time
+    [4800, function (t, p) { return Math.floor(t / 400) % 4 === group(p, 4); }],
+    // stack up a quarter at a time (25%, 50%, 75%, everyone), hold, then drop back down
+    [2400, function (t, p) { return group(p, 4) <= Math.floor(t / 600); }],
+    [800, ON],
+    [2400, function (t, p) { return group(p, 4) < 3 - Math.floor(t / 600); }],
   ]);
 
   var twinkle = parts([
-    // stars: every 300 ms each phone has a 1 in 4 chance of being on
-    [8000, function (t, p) { return rnd(p.n, Math.floor(t / 300)) < 0.25; }],
-    // count off 1-2-3-4: four groups take turns
-    [6400, function (t, p) { return Math.floor(t / 400) % 4 === (p.n - 1) % 4; }],
+    // stars: every 0.3 s each phone rolls the dice; the sky starts sparse and gets busier (6% -> 45% on)
+    [8100, function (t, p) { var k = Math.floor(t / 300); return rnd(p.n, k) < 0.06 + 0.39 * k / 26; }],
     // the stars fill in until everyone is on
     [6000, function (t, p, L) { return t > TICK + rnd(p.n, 7777) * (L - 2 * TICK); }],
-    [2000, ON],
+    // everyone on, shimmering (a few drop out for a moment)
+    [3000, function (t, p) { return rnd(p.n, 500 + Math.floor(t / 300)) > 0.15; }],
+    [1200, ON],
     // and go out one by one
-    [4000, function (t, p, L) { return t < TICK + rnd(p.n, 9999) * (L - 2 * TICK); }],
-    [1000, OFF],
+    [4800, function (t, p, L) { return t < TICK + rnd(p.n, 9999) * (L - 2 * TICK); }],
+    [1200, OFF],
   ]);
 
   // ------------------------------------------------------------------ sequences that use the seat map
@@ -142,9 +167,9 @@
   ]);
 
   var SEQS = [
-    { id: 'heartbeat', name: 'Heartbeat', seat: false, desc: 'Everyone together: slow blinks, faster, a heartbeat, quick flashes, all on.', s: heartbeat },
-    { id: 'oddeven', name: 'Odd / Even', seat: false, desc: 'Half the section on, half off, trading places faster and faster, then all together.', s: oddEven },
-    { id: 'twinkle', name: 'Twinkle', seat: false, desc: 'Random stars, a 1-2-3-4 count, stars filling in to all on, then going out one by one.', s: twinkle },
+    { id: 'heartbeat', name: 'Heartbeat', seat: false, desc: 'The section breathes (fades up and down), lub-dub thumps that die away, a faster heartbeat, a swell to all on, a slow fade out.', s: heartbeat },
+    { id: 'oddeven', name: 'Odd / Even', seat: false, desc: 'Light cross-fades between the two halves, rolls through thirds, counts off in quarters, then stacks up a quarter at a time.', s: groups },
+    { id: 'twinkle', name: 'Twinkle', seat: false, desc: 'Stars that get busier, fill in until everyone is on, shimmer, then go out one by one.', s: twinkle },
     { id: 'wave', name: 'The Wave', seat: true, desc: 'A band of light sweeps side to side, front to back, corner to corner, then fills up.', s: wave },
     { id: 'ripple', name: 'Ripple', seat: true, desc: 'Rings spread from the middle, roll back from the field, close in, a wandering spotlight, then everyone.', s: ripple },
     { id: 'checkers', name: 'Checkers & Stripes', seat: true, desc: 'Flipping checkerboards, rolling stripes, halves, and a spinning lighthouse beam.', s: checkers },
