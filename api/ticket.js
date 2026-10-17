@@ -1,9 +1,10 @@
 // Personal ticket link:  /t/<student id>-<mac>   (rewritten to /api/ticket?c=...  in vercel.json)
 //  * iPhone/iPad: serves the signed Apple Wallet pass, so Safari shows "Add to Wallet".
 //  * Anything else: a page with the student's barcode (screenshot it) and a link to the pass.
-// The passes live in a PRIVATE Vercel Blob store (passes/<id>.pkpass and passes/<id>.json); they are only
-// ever handed out by this function, and only for a code whose HMAC checks out.
+// The passes live in Redis (see _passstore.js), with the old private Vercel Blob store (passes/<id>.pkpass and
+// passes/<id>.json) as a fallback; they are only ever handed out by this function, and only for a code whose HMAC checks out.
 const { get } = require('@vercel/blob');
+const { getPass } = require('./_passstore');
 const { verify } = require('./_passlink');
 const { svg } = require('./_code128');
 
@@ -51,8 +52,11 @@ module.exports = async (req, res) => {
 
     const ua = String(req.headers['user-agent'] || '');
     const wantsPass = (req.query && req.query.pass === '1') || /iPhone|iPad|iPod/.test(ua);
+    let stored = { bytes: null, info: null };
+    try { stored = await getPass(id, { wantBytes: wantsPass }); } catch (e) { console.error('pass store:', e && e.message); }
     if (wantsPass) {
-      const bytes = await blobBytes(`passes/${id}.pkpass`);
+      let bytes = stored.bytes;
+      if (!bytes) { try { bytes = await blobBytes(`passes/${id}.pkpass`); } catch (e) { console.error('blob:', e && e.message); } }
       if (bytes) {
         res.status(200);
         res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
@@ -62,7 +66,11 @@ module.exports = async (req, res) => {
     }
 
     let name = '', ticketNo = '';
-    try { const j = await blobBytes(`passes/${id}.json`); if (j) { const info = JSON.parse(j.toString()); name = String(info.name || ''); ticketNo = String(info.ticketNo || ''); } } catch (e) { /* the name is optional */ }
+    try {
+      let info = stored.info;
+      if (!info) { const j = await blobBytes(`passes/${id}.json`); if (j) info = JSON.parse(j.toString()); }
+      if (info) { name = String(info.name || ''); ticketNo = String(info.ticketNo || ''); }
+    } catch (e) { /* the name is optional */ }
     const inner = `<div class="card">
 <img class="seal" src="/icon-192.png" alt="">
 <h1>Ravenchella</h1><p class="sub">Sequoia Homecoming · Bringing Back 2016</p>
