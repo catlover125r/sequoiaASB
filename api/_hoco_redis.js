@@ -49,8 +49,9 @@ function create(redis, sheet, hooks, opts) {
       const roster = {};
       // agreed: true / false from the sheet's "Agreement" column, or null when the sheet doesn't say (older script):
       // only an explicit false holds a student at the door.
+      // npl: true when the student is on the school's NPL list (the sheet's "AVP/NPL" tab); older script = false = never held
       // guest: the name from the sheet's "Guest Name" column when the student bought a guest ticket ('' = no guest)
-      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null, guest: typeof t.guest === 'string' ? t.guest.trim() : '' }); });
+      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null, guest: typeof t.guest === 'string' ? t.guest.trim() : '', npl: t.npl === true }); });
       const tmp = R_ROSTER + ':tmp';
       await redis.del(tmp);
       await redis.hset(tmp, roster);
@@ -139,7 +140,7 @@ function create(redis, sheet, hooks, opts) {
   // ---------------------------------------------------------------- the operations the app uses
   async function lookup(id) {
     const [r, c] = await Promise.all([rosterEntry(id), redis.hget(R_CI, id)]);
-    return r ? { found: true, name: r.name, checkedIn: c != null, agreed: r.agreed !== false } : { found: false };
+    return r ? { found: true, name: r.name, checkedIn: c != null, agreed: r.agreed !== false, npl: r.npl === true } : { found: false };
   }
 
   // A student without the dance agreement is held at the door. The roster can be up to a minute old and a student
@@ -165,18 +166,23 @@ function create(redis, sheet, hooks, opts) {
   }
 
   // opts.agreementConfirmed: a helper at the door says the student's Dance Agreement is done (the form isn't linked to the sheet
-  // in real time), so the hold is skipped. It is recorded on the check-in and in the log so it can be audited.
+  // in real time), so the agreement hold is skipped.
+  // opts.nplConfirmed: a helper tapped "Admin approved" for a student on the NPL list.
+  // Both are recorded on the check-in and in the log so they can be audited.
   async function checkin(id, by, opts) {
-    const confirmed = !!(opts && opts.agreementConfirmed);
+    const agreementOk = !!(opts && opts.agreementConfirmed), nplOk = !!(opts && opts.nplConfirmed);
     const r = await rosterEntry(id);
     if (!r) return { result: 'no_ticket' };
-    if (!confirmed) {
+    if (r.npl === true && !nplOk && !(await redis.hget(R_CI, id))) return { result: 'npl', name: r.name };   // already in: let check-in answer "already checked in"
+    if (!agreementOk) {
       const hold = await agreementHold(id, r);
       if (hold) return hold;
     }
-    const staffOk = confirmed && r.agreed === false;     // only note it when the hold would really have applied
+    const staffAgr = agreementOk && r.agreed === false;     // only note an override when the hold would really have applied
+    const staffNpl = nplOk && r.npl === true;
     const rec = { at: new Date().toISOString(), by };
-    if (staffOk) rec.agr = 'staff';
+    if (staffAgr) rec.agr = 'staff';
+    if (staffNpl) rec.npl = 'staff';
     const won = await redis.hsetnx(R_CI, id, JSON.stringify(rec));     // atomic: only one caller can win
     if (!won) {
       const prev = parse(await redis.hget(R_CI, id));
@@ -184,7 +190,7 @@ function create(redis, sheet, hooks, opts) {
     }
     await Promise.all([
       redis.sadd(R_DIRTY, id),
-      redis.rpush(R_EVENTS, JSON.stringify({ t: rec.at, a: staffOk ? 'CHECK IN (agreement confirmed by staff)' : 'CHECK IN', id, name: r.name, by })),
+      redis.rpush(R_EVENTS, JSON.stringify({ t: rec.at, a: (staffAgr || staffNpl) ? 'CHECK IN (' + [staffNpl ? 'NPL override by staff' : '', staffAgr ? 'agreement confirmed by staff' : ''].filter(Boolean).join('; ') + ')' : 'CHECK IN', id, name: r.name, by })),
     ]);
     bg(pushSoon());
     return r.guest ? { result: 'ok', name: r.name, guest: r.guest } : { result: 'ok', name: r.name };
@@ -209,7 +215,7 @@ function create(redis, sheet, hooks, opts) {
     const out = [];
     for (const id of Object.keys(roster || {})) {
       const r = parse(roster[id]), c = ci && ci[id] ? parse(ci[id]) : null;
-      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null, agreed: r.agreed !== false });
+      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null, agreed: r.agreed !== false, npl: r.npl === true });
     }
     return out;
   }
