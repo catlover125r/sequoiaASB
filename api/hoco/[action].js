@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
       if (store.fast) return send(res, 200, id ? await store.lookup(id) : { found: false });
       const byId = await H.getRoster(store);
       const t = id ? byId.get(id) : null;
-      return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn, agreed: t.agreed !== false } : { found: false });
+      return send(res, 200, t ? { found: true, name: t.name, checkedIn: !!t.checkedIn, agreed: t.agreed !== false, npl: t.npl === true } : { found: false });
     }
 
     if (action === 'checkin') {
@@ -85,14 +85,16 @@ module.exports = async (req, res) => {
       if (id.length < 3 || id.length > 12) return send(res, 200, { result: 'no_ticket' });
       housekeeping(store);
       // agreementConfirmed: the helper tapped "Dance Agreement completed" on the yellow screen
-      const confirmed = (req.body || {}).agreementConfirmed === true;
-      if (store.fast) return send(res, 200, await store.checkin(id, user.email, { agreementConfirmed: confirmed }));   // atomic, a few ms
+      // nplConfirmed: the helper tapped "Admin approved - Check in anyway" on the red NPL screen
+      const confirmed = (req.body || {}).agreementConfirmed === true, nplConfirmed = (req.body || {}).nplConfirmed === true;
+      if (store.fast) return send(res, 200, await store.checkin(id, user.email, { agreementConfirmed: confirmed, nplConfirmed }));   // atomic, a few ms
       // Instant "no ticket": if our recent copy of the roster doesn't have this ID, don't bother the sheet.
       // (We never answer "already checked in" from the copy: the sheet decides that, so an undo is never missed.)
       if (H.rosterAgeMs() < 90 * 1000) {
         try {
           const byId = await H.getRoster(store), t = byId.get(id);
           if (!t) return send(res, 200, { result: 'no_ticket' });
+          if (t.npl === true && !t.checkedIn && !nplConfirmed) return send(res, 200, { result: 'npl', name: t.name });   // on the school's NPL list
           if (t.agreed === false && !t.checkedIn && !confirmed) return send(res, 200, { result: 'no_agreement', name: t.name });   // dance agreement not signed
         } catch (e) { /* fall through to the sheet */ }
       }
