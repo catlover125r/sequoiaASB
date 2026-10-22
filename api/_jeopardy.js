@@ -3,10 +3,10 @@
 //   state    JSON, written ONLY by host actions (one writer, so no races): phase, scores, current clue...
 //   board    JSON { cats: [{ name, clues: [{ q, a } x5] } x6], dd }   the questions (edited on the control page)
 //   players  hash  secret id -> JSON { n, name, color }
-//   colors   hash  color -> n     (HSETNX, so two phones can't grab the same color)
+//   colors   hash  '#rrggbb' -> n (HSETNX, so two phones can't grab the same color)
 //   n        counter handing out player numbers
 //   buzz:<game>:<attempt>        "n|ms"   first buzz wins (SET NX)
-//   early:<game>:<attempt>:<n>   buzzed before the buzzers opened -> locked out for EARLY_MS
+//   early:<game>:<n>             buzzed while no clue was open -> locked out for EARLY_MS (stops button mashing)
 // The public view never contains answers or where the Daily Doubles are.
 const crypto = require('crypto');
 
@@ -22,15 +22,18 @@ const COLORS = [
   { id: 'white', name: 'White', hex: '#f2f2f2' },
   { id: 'pink', name: 'Pink', hex: '#ec407a' },
 ];
-const COLOR_IDS = COLORS.map((c) => c.id);
-const MAX_PLAYERS = COLORS.length;
+const MAX_PLAYERS = 10;
+// a preset id ('red') or any '#rrggbb' from the custom color picker -> '#rrggbb'
+function normColor(c) {
+  const preset = COLORS.find((x) => x.id === c);
+  if (preset) return preset.hex;
+  return typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : null;
+}
 const REOPEN_MS = 1500;     // after a wrong answer, buzzers reopen this long later (every phone hears about it first)
-const EARLY_MS = 1000;      // buzzing before the buzzers open locks you out this long
+const EARLY_MS = 1000;      // buzzing while no clue is open locks you out this long
 const TOKEN_HOURS = 12;
 const TTL = 12 * 3600;
 
-// time to read the clue before the buzzers open
-const readMs = (text) => Math.max(2000, Math.min(5000, 1200 + 30 * String(text || '').length));
 
 function placeholderBoard() {
   return {
@@ -78,7 +81,7 @@ function create(redis, opts) {
   const now = (opts && opts.now) || (() => Date.now());
   const K = { state: P + 'state', board: P + 'board', players: P + 'players', colors: P + 'colors', n: P + 'n' };
   const buzzKey = (s) => P + 'buzz:' + s.game + ':' + s.q.attempt;
-  const earlyKey = (s, n) => buzzKey(s).replace(':buzz:', ':early:') + ':' + n;
+  const earlyKey = (s, n) => P + 'early:' + s.game + ':' + n;
   const parse = (s) => (s == null ? null : typeof s === 'string' ? JSON.parse(s) : s);
   const hgetall = async (key) => {
     const v = await redis.hgetall(key);
@@ -148,7 +151,8 @@ function create(redis, opts) {
     if (!s.game || s.phase === 'off') throw bad('The host has not started the game yet.');
     name = cleanText(name, 16);
     if (!name) throw bad('Type your name first.');
-    if (!COLOR_IDS.includes(color)) throw bad('Pick a color.');
+    color = normColor(color);
+    if (!color) throw bad('Pick a color.');
     let me = game === s.game ? await playerById(id) : null;
     const taken = () => bad('Someone already has that color. Pick another one.');
     if (!me) {
@@ -175,15 +179,16 @@ function create(redis, opts) {
   async function buzz(id) {
     const [s, p] = await Promise.all([getState(), playerById(id)]);
     if (!p) return { result: 'not_joined' };
-    if (s.phase !== 'question' || !s.q) return { result: 'closed' };
     const q = s.q;
-    if (q.only != null && q.only !== p.n) return { result: 'not_you' };
-    if (q.locked.includes(p.n)) return { result: 'locked_out' };
     const t = now();
-    if (t < q.openAt) {
+    const tooEarly = ['board', 'dd', 'reveal'].includes(s.phase) || (s.phase === 'question' && t < q.openAt);
+    if (s.phase === 'question' && q.only != null && q.only !== p.n) return { result: 'not_you' };
+    if (tooEarly) {
       await redis.set(earlyKey(s, p.n), '1', { px: EARLY_MS });
       return { result: 'early', lockMs: EARLY_MS };
     }
+    if (s.phase !== 'question' || !q) return { result: 'closed' };
+    if (q.locked.includes(p.n)) return { result: 'locked_out' };
     if (await redis.get(earlyKey(s, p.n))) return { result: 'early_lock' };
     const won = await redis.set(buzzKey(s), p.n + '|' + t, { nx: true, ex: TTL });
     if (won) return { result: 'first', attempt: q.attempt };
@@ -233,7 +238,7 @@ function create(redis, opts) {
     s.phase = 'question';
     s.attempts = (s.attempts || 0) + 1;
     s.q.attempt = s.attempts;
-    s.q.openAt = now() + (lead != null ? lead : readMs(s.q.text));
+    s.q.openAt = now() + (lead || 0);
   }
 
   async function dailyDouble(n, wager) {
@@ -395,4 +400,4 @@ function getStore() {
   return shared;
 }
 
-module.exports = { create, getStore, checkPassword, makeToken, checkToken, placeholderBoard, COLORS, VALUES, readMs, REOPEN_MS, EARLY_MS };
+module.exports = { create, getStore, checkPassword, makeToken, checkToken, placeholderBoard, COLORS, VALUES, REOPEN_MS, EARLY_MS };

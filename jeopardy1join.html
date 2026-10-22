@@ -35,13 +35,17 @@ button{border:0;cursor:pointer;touch-action:manipulation}
 #join .logo{font-size:44px;text-align:center;margin:8px 0 18px}
 label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;opacity:.7;font-weight:700;margin:18px 0 8px}
 #name{width:100%;padding:15px 16px;border-radius:14px;border:0;background:#fff;color:#000;font-size:20px;font-weight:600;-webkit-user-select:text;user-select:text}
-#colors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.sw{aspect-ratio:1;border-radius:18px;background:var(--c);position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:11px;font-weight:700;box-shadow:inset 0 -6px 12px rgba(0,0,0,.18)}
+#colors{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sw{aspect-ratio:4/3;border-radius:18px;background:var(--c);position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:11px;font-weight:700;box-shadow:inset 0 -6px 12px rgba(0,0,0,.18)}
 .sw.sel{outline:4px solid #fff;outline-offset:3px}
 .sw.sel::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-62%);font-size:30px;font-weight:900}
 .sw.light{color:#111}
 .sw[disabled]{background:#22103a;box-shadow:inset 0 0 0 3px var(--c);color:#fff;cursor:not-allowed}
-.sw[disabled] span{display:block;max-width:100%;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw span{display:block;max-width:100%;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw.custom{background:conic-gradient(from 90deg,#ff3b30,#ffcc00,#34c759,#00c7be,#007aff,#af52de,#ff2d55,#ff3b30);cursor:pointer;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);font-size:13px}
+.sw.custom.picked{background:var(--c)}
+.sw.custom.picked.light{color:#111;text-shadow:none}
+.sw.custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0}
 #go{width:100%;margin-top:26px;padding:17px;border-radius:14px;background:var(--gold);color:#1a1300;font-weight:900;font-size:19px}
 #go:disabled{opacity:.5}
 #joinErr{color:#ffb4b4;min-height:1.4em;margin-top:12px;text-align:center}
@@ -86,7 +90,7 @@ label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5
 </section>
 
 <section class="view" id="play">
-  <div id="top"><div class="nm"></div><div class="sc"></div><button id="edit" type="button">Edit</button></div>
+  <div id="top"><button id="edit" type="button">Edit</button><div class="nm"></div><div class="sc"></div></div>
   <div id="stage">
     <div id="status"></div>
     <button id="btn" type="button">BUZZ</button>
@@ -106,26 +110,47 @@ label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } };
   const save = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} };
   let me = load();               // { id, game, n, name, color }
-  let S = null, editing = false, pickedColor = me.color || null, fails = 0;
+  const isHex = (c) => /^#[0-9a-f]{6}$/i.test(c || '');
+  let S = null, editing = false, pickedColor = isHex(me.color) ? me.color : null, fails = 0;
   let flash = null;              // { text, cls, until } short-lived message from my own buzz
   let myBuzz = null;             // attempt I know I won (before the next poll confirms it)
-  const serverNow = () => JClock.now() + 30;   // + a little: never show BUZZ! before the server will take it
+  const serverNow = () => JClock.now() - 50;   // run a little behind: never show BUZZ! before the server will take it
   const post = (action, body) => fetch('/api/jeopardy/' + action, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Something went wrong'); return j; });
 
   function show(id) { document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === id)); }
-  const colorHex = (id) => ((S && S.colors.find((c) => c.id === id)) || { hex: '#888' }).hex;
+  const colorHex = (c) => (isHex(c) ? c : '#888');
 
   // ---------------------------------------------------------------- join form
   function drawColors() {
     const taken = {};
     S.players.forEach((p) => { if (p.n !== mine()?.n) taken[p.color] = p.name; });
     if (pickedColor && taken[pickedColor]) pickedColor = null;
-    $('#colors').innerHTML = S.colors.map((c) => `<button type="button" class="sw${c.id === pickedColor ? ' sel' : ''}${isLight(c.hex) ? ' light' : ''}" style="--c:${c.hex}" data-c="${c.id}" ${taken[c.id] ? 'disabled' : ''} aria-label="${c.name}"><span>${taken[c.id] ? taken[c.id].replace(/[<>&]/g, '') : ''}</span></button>`).join('');
+    // built once, then updated in place: rebuilding would close the color picker while someone is using it
+    if (!$('#customSw')) {
+      $('#colors').innerHTML = S.colors.map((c) => `<button type="button" class="sw" style="--c:${c.hex}" data-c="${c.hex}" aria-label="${c.name}"><span></span></button>`).join('')
+        + '<label class="sw custom" id="customSw"><input type="color" id="customIn" value="#7a2bb8" aria-label="Custom color"><span>Custom</span></label>';
+    }
+    document.querySelectorAll('#colors button.sw').forEach((b) => {
+      const hex = b.dataset.c;
+      b.disabled = !!taken[hex];
+      b.classList.toggle('sel', hex === pickedColor);
+      b.classList.toggle('light', isLight(hex));
+      b.querySelector('span').textContent = taken[hex] || '';
+    });
+    const custom = !!pickedColor && !S.colors.some((c) => c.hex === pickedColor);
+    const cs = $('#customSw');
+    cs.classList.toggle('sel', custom);
+    cs.classList.toggle('picked', custom);
+    cs.classList.toggle('light', custom && isLight(pickedColor));
+    if (custom) { cs.style.setProperty('--c', pickedColor); $('#customIn').value = pickedColor; }
   }
+  const pickCustom = (e) => { if (e.target.id === 'customIn') { pickedColor = e.target.value.toLowerCase(); drawColors(); } };
+  $('#colors').addEventListener('input', pickCustom);
+  $('#colors').addEventListener('change', pickCustom);
   $('#colors').addEventListener('click', (e) => {
     const b = e.target.closest('.sw');
-    if (!b || b.disabled) return;
+    if (!b || b.disabled || b.id === 'customSw') return;
     pickedColor = b.dataset.c;
     drawColors();
   });
@@ -186,7 +211,7 @@ label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5
       return { cls: rank === 1 ? 'mine' : 'dim', label: '#' + rank, status: 'Game over!', sub: rank === 1 ? 'You won!' : 'Thanks for playing.' };
     }
     if (S.phase === 'lobby') return { cls: 'dim', label: 'BUZZ', status: 'You’re in!', sub: 'Waiting for the host to start the board.' };
-    return { cls: 'dim', label: 'BUZZ', status: 'Watch the TV', sub: 'The host is picking the next clue.' };
+    return { cls: 'dim', label: 'BUZZ', status: 'Watch the TV', sub: 'Buzz as soon as the clue shows up. Buzzing before that locks you out for a second.' };
   }
 
   let lastDrawn = '';
