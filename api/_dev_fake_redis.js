@@ -9,7 +9,7 @@ function fakeRedis(latencyMs = 0) {
   const L = (k) => { if (!l.has(k)) l.set(k, []); return l.get(k); };
   const api = {
     calls: 0,
-    async set(k, v, o = {}) { await wait(); api.calls++; if (o.nx && alive(k)) return null; str.set(k, v); if (o.ex) exp.set(k, Date.now() + o.ex * 1000); return 'OK'; },
+    async set(k, v, o = {}) { await wait(); api.calls++; if (o.nx && alive(k)) return null; str.set(k, v); if (o.ex) exp.set(k, Date.now() + o.ex * 1000); if (o.px) exp.set(k, Date.now() + o.px); return 'OK'; },
     async get(k) { await wait(); api.calls++; return alive(k) ? str.get(k) : null; },
     async incr(k) { await wait(); api.calls++; const v = (alive(k) ? Number(str.get(k)) : 0) + 1; str.set(k, String(v)); return v; },
     async exists(k) { await wait(); api.calls++; return alive(k) || h.has(k) || s.has(k) || l.has(k) ? 1 : 0; },
