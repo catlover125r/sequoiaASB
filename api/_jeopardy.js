@@ -19,7 +19,7 @@ const COLORS = [
   { id: 'green', name: 'Green', hex: '#43a047' },
   { id: 'teal', name: 'Teal', hex: '#00acc1' },
   { id: 'blue', name: 'Blue', hex: '#1e6fe8' },
-  { id: 'purple', name: 'Purple', hex: '#8e24aa' },
+  { id: 'white', name: 'White', hex: '#f2f2f2' },
   { id: 'pink', name: 'Pink', hex: '#ec407a' },
 ];
 const COLOR_IDS = COLORS.map((c) => c.id);
