@@ -43,8 +43,6 @@ button:disabled{opacity:.4;cursor:default}
 .pane{display:none;height:100%}
 .pane.on{display:flex}
 #err{position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);background:#b00020;padding:8px 14px;border-radius:10px;font-size:14px;display:none;z-index:50;max-width:90vw;text-align:center}
-#turn{display:none;background:#ffcc4d;color:#1a1300;font-weight:800;font-size:13px;text-align:center;padding:5px}
-@media (orientation:portrait){body.wantLandscape #turn{display:block}}
 
 /* off / lobby / reveal / final: centered cards */
 .center{flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;overflow:auto}
@@ -139,6 +137,29 @@ button:disabled{opacity:.4;cursor:default}
 .clueRow{display:grid;grid-template-columns:54px 1fr 1fr;gap:6px;margin-bottom:6px;align-items:start}
 .clueRow .v{font-family:Anton,Impact,sans-serif;color:var(--gold);font-size:18px;padding-top:8px}
 .clueRow textarea,.clueRow input{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#fff;color:#000;font-size:14px;resize:vertical;min-height:38px}
+/* phone held upright: stack everything top to bottom */
+@media (orientation:portrait){
+  #bar{gap:6px}
+  #bar .anton{font-size:18px}
+  #phase{display:none}
+  #bar button{padding:7px 10px;font-size:13px}
+  #pQ,#pDD,#pLobby{flex-direction:column}
+  #pQ{gap:8px}
+  #qL{flex:1;min-height:0}
+  #qR{flex:none}
+  .clue{font-size:17px}
+  #buzzBox{flex:none}
+  #judge{flex:none;height:max(150px,27vh)}
+  #judge button{font-size:16px}
+  #pDD{overflow:auto}
+  #pDD .l,#pDD .r{flex:none;overflow:visible}
+  #pDD .clue{flex:none;min-height:70px}
+  #pLobby{overflow:auto}
+  #pLobby .col{flex:none;overflow:visible}
+  #pLobby .col:last-child{order:-1}
+  #pLobby .qr{width:min(100%,40vh)}
+  #hgrid .hc{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:13px;letter-spacing:.02em;padding:4px 2px;word-break:normal;overflow-wrap:anywhere;hyphens:auto}
+}
 @media (max-width:560px){.clueRow{grid-template-columns:44px 1fr}.clueRow input{grid-column:2}}
 .edTools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:14px}
 .edTools select{padding:8px;border-radius:8px;background:#fff;color:#000;border:0}
@@ -167,7 +188,6 @@ button:disabled{opacity:.4;cursor:default}
 </section>
 
 <section id="app">
-  <div id="turn">Turn your phone sideways for the best layout</div>
   <div id="bar">
     <span class="anton">JEOPARDY!</span>
     <span id="phase">…</span>
@@ -318,7 +338,7 @@ button:disabled{opacity:.4;cursor:default}
   let S = null, busy = false, ddPick = null, lastKey = '';
 
   const PHASE_LABEL = { off: 'No game', lobby: 'Players joining', board: 'Board', dd: 'Daily Double', question: 'Clue', reveal: 'Answer', final: 'Final scores' };
-  const colorHex = (id) => ((S && S.colors.find((c) => c.id === id)) || { hex: '#888' }).hex;
+  const colorHex = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#888');
   const player = (n) => S && S.players.find((p) => p.n === n);
   const serverNow = () => JClock.now();
 
@@ -388,7 +408,6 @@ button:disabled{opacity:.4;cursor:default}
   function render() {
     const s = S;
     $('#phase').textContent = PHASE_LABEL[s.phase] || s.phase;
-    document.body.classList.toggle('wantLandscape', ['board', 'question', 'dd'].includes(s.phase));
     $('#bQR').style.display = s.phase === 'off' ? 'none' : '';
     if ($('#scoresOv').classList.contains('on')) drawScores();
     if (s.phase === 'off') return pane('pOff');

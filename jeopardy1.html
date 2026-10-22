@@ -60,10 +60,6 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 #clueTop b{color:var(--gold);font-weight:400}
 #clueText{text-transform:uppercase;text-align:center;text-shadow:.2vw .2vw 0 #000;line-height:1.3}
 #ddBanner{display:none;position:absolute;bottom:1.6vw;left:0;right:0;text-align:center;font-size:2.4vw;color:var(--gold)}
-.lights{position:absolute;top:0;bottom:0;width:1.2vw;background:#fff;opacity:0;transition:opacity .08s}
-.lights.l{left:0}.lights.r{right:0}
-#clueBox.open .lights{opacity:1;box-shadow:0 0 2vw 1vw rgba(255,255,255,.7)}
-#readBar{position:absolute;left:0;bottom:0;height:.6vw;background:var(--gold);width:0}
 #flash{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.72);font-size:6vw;text-align:center}
 #flash.on{display:flex;animation:pop .25s ease-out}
 #flash small{font-size:3vw;opacity:.85}
@@ -71,7 +67,6 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 /* someone buzzed: their color, the clue is hidden */
 #buzz{flex-direction:column;align-items:center;justify-content:center;background:var(--c,#333);text-align:center}
 #buzz .who{font-size:13vw;line-height:1;text-shadow:.06em .06em 0 rgba(0,0,0,.45);animation:pop .3s ease-out;padding:0 4vw;word-break:break-word}
-#buzz .sub{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;font-weight:800;font-size:3vw;margin-top:3vh;opacity:.9;text-transform:uppercase;letter-spacing:.3em}
 #buzz .val2{font-size:4vw;margin-top:2vh;opacity:.85}
 #buzz.light{color:#111}
 #buzz.light .who{text-shadow:none}
@@ -125,11 +120,9 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 
 <section class="view" id="clue">
   <div id="clueBox">
-    <div class="lights l"></div><div class="lights r"></div>
     <div id="clueTop"><span id="clueCat"></span><b id="clueVal"></b></div>
     <div id="clueText" class="serif"></div>
     <div id="ddBanner"></div>
-    <div id="readBar"></div>
     <div id="flash"></div>
   </div>
   <div class="scores"></div>
@@ -137,7 +130,6 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 
 <section class="view" id="buzz">
   <div class="who"></div>
-  <div class="sub">is answering</div>
   <div class="val2"></div>
 </section>
 
@@ -188,7 +180,6 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     right: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.35, 'triangle')); },
     wrong: () => { tone(160, 0, 0.55, 'sawtooth', 0.14); tone(120, 0.05, 0.6, 'sawtooth', 0.12); },
     dd: () => { for (let i = 0; i < 14; i++) tone(300 + i * 70, i * 0.06, 0.18, 'triangle', 0.12); },
-    open: () => tone(1046, 0, 0.12, 'sine', 0.08),
   };
   document.addEventListener('click', () => {
     if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
@@ -205,7 +196,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     return s.players.map((p) => `<div class="pod${p.n === answering ? ' ans' : ''}${locked && locked.includes(p.n) ? ' out' : ''}" style="--c:${colorHex(p.color)}">
       <div class="nm">${esc(p.name)}</div><div class="sc${p.score < 0 ? ' neg' : ''}">${money(p.score)}</div></div>`).join('');
   }
-  const colorHex = (id) => ((S && S.colors.find((c) => c.id === id)) || { hex: '#888' }).hex;
+  const colorHex = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#888');
   const player = (n) => S.players.find((p) => p.n === n);
   function fillScores(s, answering, locked) { document.querySelectorAll('.scores').forEach((el) => { el.innerHTML = scoresHtml(s, answering, locked); }); }
 
@@ -294,17 +285,10 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     }
   }
 
-  // things that move with the clock: the reading bar, the buzz-in lights, the wrong/skip flash
-  let wasOpen = false;
+  // the short "wrong / no change" flash over the clue
   function tick() {
-    if (!S || S.phase !== 'question' || S.q.buzz) { wasOpen = false; return requestAnimationFrame(tick); }
+    if (!S || S.phase !== 'question' || S.q.buzz) return requestAnimationFrame(tick);
     const q = S.q, t = serverNow();
-    const open = t >= q.openAt;
-    $('#clueBox').classList.toggle('open', open);
-    if (open && !wasOpen) SFX.open();
-    wasOpen = open;
-    const total = Math.max(1, q.openAt - (q.readFrom || q.openAt - 1));
-    $('#readBar').style.width = open ? '0' : (100 * (1 - (q.openAt - t) / total)) + '%';
     const f = $('#flash');
     if (q.last && t - q.last.at < 1800 && q.last.verdict !== 'right') {
       const p = player(q.last.n);
@@ -324,9 +308,8 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       if (!r.ok) throw new Error(r.status);
       const s = await r.json();
       // remember when this clue's reading time started, for the progress bar
-      if (s.q && s.q.openAt) s.q.readFrom = (S && S.q && S.q.attempt === s.q.attempt && S.q.readFrom) || Math.min(serverNow(), s.q.openAt - 1);
       fails = 0; $('#conn').style.display = 'none';
-      const key = JSON.stringify({ ...s, t: 0, q: s.q && { ...s.q, readFrom: 0 } });
+      const key = JSON.stringify({ ...s, t: 0 });
       const prev = S;
       S = s;
       if (key !== lastKey) { lastKey = key; render(s, prev); }
