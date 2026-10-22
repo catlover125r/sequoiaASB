@@ -45,6 +45,9 @@ function placeholderBoard() {
   };
 }
 
+// audio clues are mp3s shipped with the site under random names (so the URL doesn't give the song away)
+const AUDIO_RE = /^\/jeopardy1-media\/[a-z0-9-]{4,40}\.mp3$/;
+
 const bad = (msg) => Object.assign(new Error(msg), { code: 400 });
 const cleanText = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -57,7 +60,14 @@ function cleanBoard(b) {
       if (!cat || !Array.isArray(cat.clues) || cat.clues.length !== ROWS) throw bad('each category needs 5 clues');
       return {
         name: cleanText(cat.name, 60) || 'Category ' + (c + 1),
-        clues: cat.clues.map((k) => ({ q: cleanText(k && k.q, 400), a: cleanText(k && k.a, 200) })),
+        clues: cat.clues.map((k) => {
+          const out = { q: cleanText(k && k.q, 400), a: cleanText(k && k.a, 200) };
+          if (k && k.audio) {
+            if (!AUDIO_RE.test(k.audio)) throw bad('bad audio path: ' + String(k.audio).slice(0, 80));
+            out.audio = k.audio;
+          }
+          return out;
+        }),
       };
     }),
   };
@@ -136,7 +146,7 @@ function create(redis, opts) {
     if (s.phase === 'question' || s.phase === 'dd') {
       const q = s.q;
       out.q = { c: q.c, r: q.r, value: q.value, dd: q.dd, only: q.only == null ? null : q.only };
-      if (s.phase === 'question') Object.assign(out.q, { text: q.text, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
+      if (s.phase === 'question') Object.assign(out.q, { text: q.text, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
       if (host) Object.assign(out.q, { text: q.text, answer: q.answer });
     }
     if (s.phase === 'reveal') out.rev = s.rev;
@@ -228,7 +238,7 @@ function create(redis, opts) {
     if (s.used[c][r]) throw bad('already played');
     const clue = (await getBoard()).cats[c].clues[r];
     const isDD = s.dd.some(([x, y]) => x === c && y === r);
-    s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, locked: [], attempt: 0, openAt: 0, last: null };
+    s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
     if (isDD) s.phase = 'dd';
     else openClue(s);
     return putState(s);
@@ -262,9 +272,18 @@ function create(redis, opts) {
     return s;
   }
 
+  // audio clue: the TV starts the song over
+  async function replay() {
+    const s = await getState();
+    need(s, 'question');
+    if (!s.q.audio) throw bad('this clue has no song');
+    s.q.replay = (s.q.replay || 0) + 1;
+    return putState(s);
+  }
+
   function finish(s, winner, delta) {
     s.used[s.q.c][s.q.r] = true;
-    s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
+    s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, audio: s.q.audio || null, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
     s.q = null;
     s.phase = 'reveal';
   }
@@ -355,7 +374,7 @@ function create(redis, opts) {
   }
 
   return {
-    getState, publicView, hostView, getBoard, saveBoard, join, me, buzz,
+    getState, publicView, hostView, getBoard, saveBoard, join, me, buzz, replay,
     start, begin, select, dailyDouble, openNow, judge, reveal, cancel, next, final, adjust, kick, end,
   };
 }

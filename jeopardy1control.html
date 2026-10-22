@@ -136,6 +136,8 @@ button:disabled{opacity:.4;cursor:default}
 .cat input.cn{width:100%;padding:10px;border-radius:10px;border:0;background:var(--blue);color:#fff;font-size:17px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
 .clueRow{display:grid;grid-template-columns:54px 1fr 1fr;gap:6px;margin-bottom:6px;align-items:start}
 .clueRow .v{font-family:Anton,Impact,sans-serif;color:var(--gold);font-size:18px;padding-top:8px}
+.clueRow .au{display:block;margin-top:4px;padding:3px 0;width:100%;border:0;border-radius:6px;background:var(--gold);color:#000;font-size:13px;font-weight:800;font-family:inherit}
+.clueRow .au.on{background:#7dff9b}
 .clueRow textarea,.clueRow input{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#fff;color:#000;font-size:14px;resize:vertical;min-height:38px}
 /* phone held upright: stack everything top to bottom */
 @media (orientation:portrait){
@@ -251,6 +253,7 @@ button:disabled{opacity:.4;cursor:default}
           <div id="qStatus"></div>
           <div id="qActs">
             <button id="bOpen" class="prim" type="button">Open buzzers now</button>
+            <button id="bReplay" type="button">♪ Restart the song</button>
             <button id="bNobody" type="button">Nobody got it — show answer</button>
             <button id="bCancel" type="button">Wrong square — back to board</button>
           </div>
@@ -443,6 +446,7 @@ button:disabled{opacity:.4;cursor:default}
       $('#qAns').textContent = q.answer;
       $('#qLocked').textContent = q.locked.length ? 'Already wrong: ' + q.locked.map((n) => (player(n) || {}).name).join(', ') : '';
       $('#bCancel').style.display = q.locked.length || q.last ? 'none' : '';
+      $('#bReplay').style.display = q.audio ? '' : 'none';
       if (q.buzz) {
         const p = player(q.buzz.n) || { name: 'Player ' + q.buzz.n, color: 'gray' };
         const hex = colorHex(p.color);
@@ -531,6 +535,7 @@ button:disabled{opacity:.4;cursor:default}
   $('#bBegin').onclick = () => act('begin');
   $('#bOpen').onclick = () => act('open');
   $('#bNobody').onclick = () => act('reveal');
+  $('#bReplay').onclick = () => act('replay');
   $('#bCancel').onclick = () => act('cancel');
   $('#bDDCancel').onclick = () => act('cancel');
   $('#bNext').onclick = () => act('next');
@@ -551,18 +556,26 @@ button:disabled{opacity:.4;cursor:default}
   $('#mOut').onclick = () => { $('#menuOv').classList.remove('on'); signOut(); };
 
   // ---------------------------------------------------------------- questions editor
-  let edDirty = false;
+  let edDirty = false, edAudio = [];
+  const preview = new Audio();
   function edDraw(b) {
     $('#edDD').value = String(b.dd);
+    // song files can't be typed in here; they ride along with their square
+    edAudio = b.cats.map((cat) => cat.clues.map((k) => (k && k.audio) || null));
+    preview.pause();
     $('#edCats').innerHTML = b.cats.map((cat, c) => `<div class="cat"><input class="cn" data-c="${c}" value="${esc(cat.name)}" placeholder="Category ${c + 1}">
-      ${cat.clues.map((k, r) => `<div class="clueRow"><div class="v">$${(r + 1) * 200}</div><textarea data-c="${c}" data-r="${r}" data-f="q" rows="2" placeholder="Clue">${esc(k.q)}</textarea><input data-c="${c}" data-r="${r}" data-f="a" value="${esc(k.a)}" placeholder="Answer"></div>`).join('')}
+      ${cat.clues.map((k, r) => `<div class="clueRow"><div class="v">$${(r + 1) * 200}${edAudio[c][r] ? `<button type="button" class="au" data-au="${c},${r}">♪ play</button>` : ''}</div><textarea data-c="${c}" data-r="${r}" data-f="q" rows="2" placeholder="Clue">${esc(k.q)}</textarea><input data-c="${c}" data-r="${r}" data-f="a" value="${esc(k.a)}" placeholder="Answer"></div>`).join('')}
     </div>`).join('');
     edDirty = false;
   }
   function edRead() {
     const b = { dd: Number($('#edDD').value), cats: [] };
     document.querySelectorAll('#edCats .cat').forEach((el, c) => {
-      b.cats.push({ name: el.querySelector('.cn').value, clues: [0, 1, 2, 3, 4].map((r) => ({ q: el.querySelector(`[data-r="${r}"][data-f="q"]`).value, a: el.querySelector(`[data-r="${r}"][data-f="a"]`).value })) });
+      b.cats.push({ name: el.querySelector('.cn').value, clues: [0, 1, 2, 3, 4].map((r) => {
+        const k = { q: el.querySelector(`[data-r="${r}"][data-f="q"]`).value, a: el.querySelector(`[data-r="${r}"][data-f="a"]`).value };
+        if (edAudio[c] && edAudio[c][r]) k.audio = edAudio[c][r];
+        return k;
+      }) });
     });
     return b;
   }
@@ -573,8 +586,19 @@ button:disabled{opacity:.4;cursor:default}
   $('#bEdit').onclick = edOpen;
   $('#bEdit2').onclick = edOpen;
   $('#edCats').addEventListener('input', () => { edDirty = true; });
+  $('#edCats').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-au]');
+    if (!b) return;
+    const [c, r] = b.dataset.au.split(',').map(Number);
+    const was = b.classList.contains('on');
+    document.querySelectorAll('#edCats .au.on').forEach((x) => { x.classList.remove('on'); x.textContent = '♪ play'; });
+    preview.pause();
+    if (was) return;
+    preview.src = edAudio[c][r]; preview.currentTime = 0; preview.play().catch(() => {});
+    b.classList.add('on'); b.textContent = '■ stop';
+  });
   $('#edDD').addEventListener('change', () => { edDirty = true; });
-  $('#edClose').onclick = async () => { if (!edDirty || await ask('Close without saving your changes?', 'Discard')) $('#editOv').classList.remove('on'); };
+  $('#edClose').onclick = async () => { if (!edDirty || await ask('Close without saving your changes?', 'Discard')) { preview.pause(); $('#editOv').classList.remove('on'); } };
   $('#edSave').onclick = async () => {
     try { const r = await api('board', { board: edRead() }); edDraw(r.board); showErr('Saved.'); $('#err').style.background = '#14a44d'; setTimeout(() => { $('#err').style.background = ''; }, 3600); }
     catch (e) { showErr(e.message); }

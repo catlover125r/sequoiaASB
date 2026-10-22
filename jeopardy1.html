@@ -61,6 +61,18 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 #ddBanner{display:none;position:absolute;bottom:1.6vw;left:0;right:0;text-align:center;font-size:2.4vw;color:var(--gold)}
 #clueW{display:none;margin-top:4vh;font-size:3.6vw;padding:.8vw 2.4vw;border-radius:99px;animation:pop .35s ease-out}
 #clueW.on{display:block}
+/* song clue: bouncing bars while it plays */
+#clueEq{display:none;align-items:flex-end;gap:1.1vw;height:16vh;margin-bottom:5vh}
+#clueEq.on{display:flex}
+#clueEq i{width:2.2vw;height:100%;background:var(--gold);border-radius:.4vw;box-shadow:.2vw .2vw 0 #000;transform-origin:bottom;animation:eq 1s ease-in-out infinite alternate}
+#clueEq.paused i{animation-play-state:paused}
+#clueEq i:nth-child(2){animation-duration:.7s;animation-delay:-.3s}
+#clueEq i:nth-child(3){animation-duration:1.2s;animation-delay:-.6s}
+#clueEq i:nth-child(4){animation-duration:.8s;animation-delay:-.1s}
+#clueEq i:nth-child(5){animation-duration:1.05s;animation-delay:-.45s}
+#clueEq i:nth-child(6){animation-duration:.65s;animation-delay:-.2s}
+#clueEq i:nth-child(7){animation-duration:.95s;animation-delay:-.7s}
+@keyframes eq{0%{transform:scaleY(.15)}100%{transform:scaleY(1)}}
 /* full-screen green / red flash when the host judges an answer */
 #fx{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0}
 #fx.go{animation:fx .9s ease-out}
@@ -122,6 +134,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 <section class="view" id="clue">
   <div id="clueBox">
     <div id="clueTop"><span id="clueCat"></span><b id="clueVal"></b></div>
+    <div id="clueEq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div id="clueText" class="serif"></div>
     <div id="ddBanner"></div>
     <div id="clueW"></div>
@@ -154,7 +167,8 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 </section>
 
 <div id="fx"></div>
-<div id="hint">Click anywhere for full screen</div>
+<audio id="song" preload="auto"></audio>
+<div id="hint">Click anywhere for full screen and sound</div>
 <div id="conn">Reconnecting&hellip;</div>
 
 <script src="/jeopardy1-clock.js"></script>
@@ -189,7 +203,40 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
     if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {});
     $('#hint').style.display = 'none';
+    if (songWant) playSong();
   });
+
+  // ---------------------------------------------------------------- song clues
+  // plays while the clue is up and on the answer screen, pauses while someone is answering,
+  // picks up where it left off when the buzzers reopen
+  const song = $('#song');
+  let songKey = '', songReplay = 0, songWant = false, fadeTimer = null;
+  function playSong() {
+    clearInterval(fadeTimer); song.volume = 1;
+    song.play().then(() => { $('#clueEq').classList.remove('paused'); }).catch(() => {
+      $('#hint').textContent = 'Click anywhere to turn on the sound';
+      $('#hint').style.display = 'block';
+    });
+  }
+  function fadeSong() {
+    clearInterval(fadeTimer);
+    if (song.paused) return;
+    fadeTimer = setInterval(() => {
+      song.volume = Math.max(0, song.volume - 0.08);
+      if (song.volume <= 0) { clearInterval(fadeTimer); song.pause(); }
+    }, 60);
+  }
+  function syncSong(s) {
+    const clue = s.phase === 'question' ? s.q : s.phase === 'reveal' ? s.rev : null;
+    const audio = clue && clue.audio;
+    if (!audio) { songWant = false; songKey = ''; fadeSong(); return; }
+    const key = s.game + ':' + clue.c + ':' + clue.r;
+    if (key !== songKey) { songKey = key; songReplay = 0; song.src = audio; }
+    if (s.phase === 'question' && (s.q.replay || 0) !== songReplay) { songReplay = s.q.replay || 0; song.currentTime = 0; }
+    songWant = !(s.phase === 'question' && s.q.buzz);
+    if (songWant) playSong();
+    else { clearInterval(fadeTimer); song.pause(); $('#clueEq').classList.add('paused'); }
+  }
 
   // ---------------------------------------------------------------- rendering
   function show(id) { document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === id)); }
@@ -247,7 +294,8 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       $('#clueCat').textContent = s.cats[q.c];
       $('#clueVal').textContent = (q.dd ? 'Daily Double · ' : '') + money(q.value);
       $('#clueText').textContent = q.text;
-      $('#clueText').style.fontSize = clueSize(q.text);
+      $('#clueText').style.fontSize = q.audio ? '4.4vw' : clueSize(q.text);
+      $('#clueEq').classList.toggle('on', !!q.audio);
       const only = q.only != null && player(q.only);
       $('#ddBanner').style.display = only ? 'block' : 'none';
       if (only) $('#ddBanner').textContent = only.name + ' is playing for ' + money(q.value);
@@ -319,12 +367,11 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       const r = await fetch('/api/jeopardy/state?live=1', { cache: 'no-store' });
       if (!r.ok) throw new Error(r.status);
       const s = await r.json();
-      // remember when this clue's reading time started, for the progress bar
       fails = 0; $('#conn').style.display = 'none';
       const key = JSON.stringify({ ...s, t: 0 });
       const prev = S;
       S = s;
-      if (key !== lastKey) { lastKey = key; render(s, prev); }
+      if (key !== lastKey) { lastKey = key; render(s, prev); syncSong(s); }
     } catch (e) {
       if (++fails > 3) $('#conn').style.display = 'block';
     }
