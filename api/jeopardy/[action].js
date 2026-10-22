@@ -5,11 +5,12 @@
 //   join    POST  { id?, game?, name, color } -> { id, game, n, name, color }
 //   me      POST  { id, game } -> { player }  (null = join again)
 //   buzz    POST  { id } -> { result }
+//   pin     POST  { id, x, y } -> { result }   where-on-campus guess (0..1 across the campus map)
 //   login   POST  { password } -> { token }
 //   host    GET   host view (with the answer)                 -- everything below needs header x-jeopardy-token
 //   board   GET / POST { board }                                questions editor
 //   start, begin, select {c,r}, dd {n,wager}, open, judge {attempt,verdict}, reveal, cancel, next, final,
-//   replay, adjust {n,delta}, kick {n}, end                     POST, each returns the host view
+//   replay, pinend {force}, adjust {n,delta}, kick {n}, end     POST, each returns the host view
 const J = require('../_jeopardy');
 
 function send(res, code, body, cdnSeconds) {
@@ -31,6 +32,7 @@ const HOST_ACTIONS = {
   judge: (s, b) => s.judge(b.attempt, String(b.verdict || '')),
   reveal: (s) => s.reveal(),
   replay: (s) => s.replay(),
+  pinend: (s, b) => s.pinEnd(!!b.force),
   cancel: (s) => s.cancel(),
   next: (s) => s.next(),
   final: (s) => s.final(),
@@ -62,6 +64,11 @@ module.exports = async (req, res) => {
     if (action === 'buzz') {
       if (!isPost) return send(res, 405, { error: 'method' });
       return send(res, 200, { ...(await store.buzz(body.id)), t: Date.now() });
+    }
+
+    if (action === 'pin') {
+      if (!isPost) return send(res, 405, { error: 'method' });
+      return send(res, 200, await store.placePin(body.id, body.x, body.y));
     }
 
     if (action === 'login') {

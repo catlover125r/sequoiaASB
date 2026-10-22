@@ -19,6 +19,7 @@ function fakeRedis(latencyMs = 0) {
     async hset(k, o) { await wait(); api.calls++; let n = 0; const m = H(k); Object.keys(o).forEach((f) => { if (!m.has(f)) n++; m.set(f, String(o[f])); }); return n; },
     async hsetnx(k, f, v) { await wait(); api.calls++; const m = H(k); if (m.has(f)) return 0; m.set(f, String(v)); return 1; },
     async hdel(k, ...fs) { await wait(); api.calls++; const m = h.get(k); let n = 0; fs.forEach((f) => { if (m && m.delete(f)) n++; }); return n; },
+    async expire(k) { await wait(); api.calls++; return h.has(k) || str.has(k) ? 1 : 0; },
     async hlen(k) { await wait(); api.calls++; const m = h.get(k); return m ? m.size : 0; },
     async hgetall(k) { await wait(); api.calls++; const m = h.get(k); return m && m.size ? Object.fromEntries(m) : null; },
     async sadd(k, ...ms) { await wait(); api.calls++; const st = S(k); let n = 0; ms.forEach((m) => { if (!st.has(m)) { st.add(m); n++; } }); return n; },
