@@ -59,9 +59,12 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 #clueTop b{color:var(--gold);font-weight:400}
 #clueText{text-transform:uppercase;text-align:center;text-shadow:.2vw .2vw 0 #000;line-height:1.3}
 #ddBanner{display:none;position:absolute;bottom:1.6vw;left:0;right:0;text-align:center;font-size:2.4vw;color:var(--gold)}
-#flash{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.72);font-size:6vw;text-align:center}
-#flash.on{display:flex;animation:pop .25s ease-out}
-#flash small{font-size:3vw;opacity:.85}
+#clueW{display:none;margin-top:4vh;font-size:3.6vw;padding:.8vw 2.4vw;border-radius:99px;animation:pop .35s ease-out}
+#clueW.on{display:block}
+/* full-screen green / red flash when the host judges an answer */
+#fx{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0}
+#fx.go{animation:fx .9s ease-out}
+@keyframes fx{0%{opacity:.85}100%{opacity:0}}
 
 /* someone buzzed: their color, the clue is hidden */
 #buzz{flex-direction:column;align-items:center;justify-content:center;background:var(--c,#333);text-align:center}
@@ -121,7 +124,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     <div id="clueTop"><span id="clueCat"></span><b id="clueVal"></b></div>
     <div id="clueText" class="serif"></div>
     <div id="ddBanner"></div>
-    <div id="flash"></div>
+    <div id="clueW"></div>
   </div>
   <div class="scores"></div>
 </section>
@@ -150,6 +153,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
   <div id="finalList"></div>
 </section>
 
+<div id="fx"></div>
 <div id="hint">Click anywhere for full screen</div>
 <div id="conn">Reconnecting&hellip;</div>
 
@@ -248,7 +252,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       $('#ddBanner').style.display = only ? 'block' : 'none';
       if (only) $('#ddBanner').textContent = only.name + ' is playing for ' + money(q.value);
       fillScores(s, null, q.locked);
-      if (prev && prev.q && prev.q.attempt !== q.attempt && q.last && prev.q.buzz) (q.last.verdict === 'wrong' ? SFX.wrong : null)?.();
+      if (prev && prev.q && prev.q.attempt !== q.attempt && q.last && q.last.verdict === 'wrong') { SFX.wrong(); flashFx('#e0182d'); }
       show('clue');
       return;
     }
@@ -264,7 +268,10 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
         el.textContent = w.name + '  +' + money(r.delta);
       } else { el.style.background = 'rgba(0,0,0,.35)'; el.style.color = '#fff'; el.textContent = 'Nobody got it'; }
       fillScores(s, r.winner);
-      if (!prev || prev.phase !== 'reveal') (w ? SFX.right : r.last && r.last.verdict === 'wrong' ? SFX.wrong : null)?.();
+      if (prev && prev.phase !== 'reveal') {
+        if (w) { SFX.right(); flashFx('#14c25a'); }
+        else if (r.last && r.last.verdict === 'wrong') { SFX.wrong(); flashFx('#e0182d'); }
+      }
       return show('reveal');
     }
     if (phase === 'final') {
@@ -283,20 +290,27 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     }
   }
 
-  // the short "wrong / no change" flash over the clue
+  function flashFx(color) {
+    const f = $('#fx');
+    f.style.background = color;
+    f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  }
+
+  // after a wrong answer (or "no change"), the player's pill sits under the clue for a few seconds,
+  // like the correct-answer screen but without giving the answer away
   function tick() {
     if (!S || S.phase !== 'question' || S.q.buzz) return requestAnimationFrame(tick);
     const q = S.q, t = serverNow();
-    const f = $('#flash');
-    if (q.last && t - q.last.at < 1800 && q.last.verdict !== 'right') {
-      const p = player(q.last.n);
-      if (!f.classList.contains('on')) {
-        f.innerHTML = q.last.verdict === 'wrong'
-          ? `<div style="color:#ff6b6b">✗ ${esc(p ? p.name : '')}</div><small>${money(q.last.delta)}</small>`
-          : `<div style="color:#ffd84d">${esc(p ? p.name : '')}</div><small>No change — buzzers reopen</small>`;
-        f.classList.add('on');
+    const el = $('#clueW');
+    const p = q.last && player(q.last.n);
+    if (p && q.last.verdict !== 'right' && t - q.last.at < 3000) {
+      if (!el.classList.contains('on')) {
+        const hex = colorHex(p.color);
+        el.style.background = hex; el.style.color = isLight(hex) ? '#111' : '#fff';
+        el.textContent = p.name + '  ' + (q.last.verdict === 'wrong' ? money(q.last.delta) : 'no change');
+        el.classList.add('on');
       }
-    } else f.classList.remove('on');
+    } else el.classList.remove('on');
     requestAnimationFrame(tick);
   }
 
