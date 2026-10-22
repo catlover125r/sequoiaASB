@@ -9,7 +9,7 @@
 //   host    GET   host view (with the answer)                 -- everything below needs header x-jeopardy-token
 //   board   GET / POST { board }                                questions editor
 //   start, begin, select {c,r}, dd {n,wager}, open, judge {attempt,verdict}, reveal, cancel, next, final,
-//   adjust {n,delta}, kick {n}, end                             POST, each returns the host view
+//   replay, adjust {n,delta}, kick {n}, end                     POST, each returns the host view
 const J = require('../_jeopardy');
 
 function send(res, code, body, cdnSeconds) {
@@ -30,6 +30,7 @@ const HOST_ACTIONS = {
   open: (s) => s.openNow(),
   judge: (s, b) => s.judge(b.attempt, String(b.verdict || '')),
   reveal: (s) => s.reveal(),
+  replay: (s) => s.replay(),
   cancel: (s) => s.cancel(),
   next: (s) => s.next(),
   final: (s) => s.final(),
