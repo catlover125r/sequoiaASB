@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#050a63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Jeopardy Buzzer</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#0b1cb0;--deep:#050a63;--night:#02042e;--gold:#ffcc4d;--me:#888}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:var(--night);color:#fff;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+button,input{font:inherit;color:inherit}
+button{border:0;cursor:pointer;touch-action:manipulation}
+.view{display:none;min-height:100%;min-height:100dvh}
+.view.on{display:flex}
+.logo{font-family:Anton,Impact,sans-serif;font-size:56px;letter-spacing:.02em;text-shadow:3px 3px 0 #000;line-height:1}
+
+/* waiting for the host */
+#wait{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;background:radial-gradient(ellipse at center,#1426c9 0%,var(--deep) 60%,var(--night) 100%)}
+#wait p{opacity:.8;font-size:18px;line-height:1.4;max-width:300px}
+.dots::after{content:'';animation:dots 1.4s steps(4) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+
+/* join form */
+#join{flex-direction:column;padding:max(20px,env(safe-area-inset-top)) 18px 28px;background:linear-gradient(var(--deep),var(--night));align-items:center}
+#join form{width:100%;max-width:440px}
+#join .logo{font-size:44px;text-align:center;margin:8px 0 18px}
+label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;opacity:.7;font-weight:700;margin:18px 0 8px}
+#name{width:100%;padding:15px 16px;border-radius:14px;border:0;background:#fff;color:#000;font-size:20px;font-weight:600;-webkit-user-select:text;user-select:text}
+#colors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sw{aspect-ratio:1;border-radius:18px;background:var(--c);position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:11px;font-weight:700;box-shadow:inset 0 -6px 12px rgba(0,0,0,.18)}
+.sw.sel{outline:4px solid #fff;outline-offset:3px}
+.sw.sel::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-62%);font-size:30px;font-weight:900}
+.sw.light{color:#111}
+.sw[disabled]{background:#151a45;box-shadow:inset 0 0 0 3px var(--c);color:#fff;cursor:not-allowed}
+.sw[disabled] span{display:block;max-width:100%;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#go{width:100%;margin-top:26px;padding:17px;border-radius:14px;background:var(--gold);color:#1a1300;font-weight:900;font-size:19px}
+#go:disabled{opacity:.5}
+#joinErr{color:#ffb4b4;min-height:1.4em;margin-top:12px;text-align:center}
+
+/* buzzer */
+#play{flex-direction:column;background:var(--night)}
+#top{display:flex;align-items:center;gap:12px;padding:max(12px,env(safe-area-inset-top)) 16px 12px;background:var(--me);color:var(--meText,#fff)}
+#top .nm{font-weight:800;font-size:20px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#top .sc{font-family:Anton,Impact,sans-serif;font-size:28px}
+#edit{background:rgba(0,0,0,.18);border-radius:99px;padding:6px 12px;font-size:13px;font-weight:700}
+#stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:18px}
+#status{font-size:20px;font-weight:700;text-align:center;min-height:2.6em;display:flex;align-items:center;max-width:340px;line-height:1.3}
+#btn{width:min(78vw,52vh,380px);aspect-ratio:1;border-radius:50%;font-family:Anton,Impact,sans-serif;font-size:min(15vw,64px);letter-spacing:.03em;color:#fff;background:#3a3f55;box-shadow:0 14px 0 #23263a,0 18px 30px rgba(0,0,0,.5);transition:background .12s;touch-action:none}
+#btn:active,#btn.press{transform:translateY(8px);box-shadow:0 6px 0 #23263a,0 8px 18px rgba(0,0,0,.5)}
+#btn.ready{background:#c98a00;box-shadow:0 14px 0 #7a5400,0 18px 30px rgba(0,0,0,.5)}
+#btn.go{background:#e0182d;box-shadow:0 14px 0 #8a0a17,0 0 60px rgba(255,40,60,.65);animation:pulse 1s ease-in-out infinite}
+#btn.mine{background:#14a44d;box-shadow:0 14px 0 #0a5f2b,0 0 60px rgba(40,255,120,.5);animation:none}
+#btn.dim{background:#25283a;color:rgba(255,255,255,.35);box-shadow:0 14px 0 #15172a}
+#btn.early{background:#6b2a2a}
+@keyframes pulse{50%{box-shadow:0 14px 0 #8a0a17,0 0 90px rgba(255,40,60,.9)}}
+#sub{font-size:15px;opacity:.65;text-align:center;min-height:1.3em;max-width:340px}
+#conn{position:fixed;top:env(safe-area-inset-top);left:0;right:0;text-align:center;background:#b00020;font-size:14px;padding:5px;display:none;z-index:9}
+</style>
+</head>
+<body>
+
+<section class="view" id="wait">
+  <div class="logo">JEOPARDY!</div>
+  <p id="waitMsg"><span class="dots">Waiting for the host to start the game</span><br><br>Keep this page open &mdash; it will continue on its own.</p>
+</section>
+
+<section class="view" id="join">
+  <form id="joinForm" autocomplete="off">
+    <div class="logo">JEOPARDY!</div>
+    <label class="l" for="name">Your name</label>
+    <input id="name" maxlength="16" placeholder="Name" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done">
+    <label class="l">Pick your color</label>
+    <div id="colors"></div>
+    <button id="go" type="submit">Join the game</button>
+    <div id="joinErr"></div>
+  </form>
+</section>
+
+<section class="view" id="play">
+  <div id="top"><div class="nm"></div><div class="sc"></div><button id="edit" type="button">Edit</button></div>
+  <div id="stage">
+    <div id="status"></div>
+    <button id="btn" type="button">BUZZ</button>
+    <div id="sub"></div>
+  </div>
+</section>
+
+<div id="conn">Reconnecting&hellip;</div>
+
+<script src="/jeopardy1-clock.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const money = (n) => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString();
+  const isLight = (hex) => { const h = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16)); return (r * 299 + g * 587 + b * 114) / 1000 > 165; };
+  const KEY = 'jeopardy1.me';
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } };
+  const save = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} };
+  let me = load();               // { id, game, n, name, color }
+  let S = null, editing = false, pickedColor = me.color || null, fails = 0;
+  let flash = null;              // { text, cls, until } short-lived message from my own buzz
+  let myBuzz = null;             // attempt I know I won (before the next poll confirms it)
+  const serverNow = () => JClock.now() + 30;   // + a little: never show BUZZ! before the server will take it
+  const post = (action, body) => fetch('/api/jeopardy/' + action, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Something went wrong'); return j; });
+
+  function show(id) { document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === id)); }
+  const colorHex = (id) => ((S && S.colors.find((c) => c.id === id)) || { hex: '#888' }).hex;
+
+  // ---------------------------------------------------------------- join form
+  function drawColors() {
+    const taken = {};
+    S.players.forEach((p) => { if (p.n !== mine()?.n) taken[p.color] = p.name; });
+    if (pickedColor && taken[pickedColor]) pickedColor = null;
+    $('#colors').innerHTML = S.colors.map((c) => `<button type="button" class="sw${c.id === pickedColor ? ' sel' : ''}${isLight(c.hex) ? ' light' : ''}" style="--c:${c.hex}" data-c="${c.id}" ${taken[c.id] ? 'disabled' : ''} aria-label="${c.name}"><span>${taken[c.id] ? taken[c.id].replace(/[<>&]/g, '') : ''}</span></button>`).join('');
+  }
+  $('#colors').addEventListener('click', (e) => {
+    const b = e.target.closest('.sw');
+    if (!b || b.disabled) return;
+    pickedColor = b.dataset.c;
+    drawColors();
+  });
+  $('#joinForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('#name').value.trim();
+    $('#joinErr').textContent = '';
+    if (!name) { $('#joinErr').textContent = 'Type your name first.'; return; }
+    if (!pickedColor) { $('#joinErr').textContent = 'Pick a color.'; return; }
+    $('#go').disabled = true;
+    try {
+      const r = await post('join', { id: me.id, game: me.game, name, color: pickedColor });
+      me = r; save(me); editing = false;
+      wakeLock();
+      render();
+    } catch (err) { $('#joinErr').textContent = err.message; poll(true); }
+    $('#go').disabled = false;
+  });
+  $('#edit').addEventListener('click', () => {
+    editing = true; $('#name').value = me.name || ''; pickedColor = me.color; $('#go').textContent = 'Save'; render();
+  });
+
+  // am I in the current game?
+  function mine() {
+    if (!S || !me.id || me.game !== S.game) return null;
+    return S.players.find((p) => p.n === me.n) || null;
+  }
+
+  // ---------------------------------------------------------------- buzzer
+  // what the button should look like right now
+  function buttonState() {
+    const p = mine(), q = S.q;
+    if (flash && Date.now() < flash.until) return flash;
+    if (S.phase === 'question' && q) {
+      const attempt = q.attempt;
+      if (q.buzz) {
+        if (q.buzz.n === p.n || myBuzz === attempt) return { cls: 'mine', label: 'YOU!', status: 'You buzzed in first!', sub: 'Say your answer out loud.' };
+        const who = S.players.find((x) => x.n === q.buzz.n);
+        return { cls: 'dim', label: 'BUZZ', status: (who ? who.name : 'Someone') + ' buzzed in', sub: 'Wait — they might get it wrong.' };
+      }
+      if (myBuzz === attempt) return { cls: 'mine', label: 'YOU!', status: 'You buzzed in first!', sub: 'Say your answer out loud.' };
+      if (q.only != null && q.only !== p.n) {
+        const who = S.players.find((x) => x.n === q.only);
+        return { cls: 'dim', label: 'BUZZ', status: 'Daily Double', sub: (who ? who.name : 'Someone') + ' is playing this one.' };
+      }
+      if (q.locked.includes(p.n)) return { cls: 'dim', label: 'OUT', status: 'You’re out on this one', sub: 'You already answered this clue.' };
+      if (serverNow() < q.openAt) return { cls: 'ready', label: 'WAIT', status: 'Read the clue…', sub: 'Buzzing early locks you out for a second.' };
+      return { cls: 'go', label: 'BUZZ!', status: q.only != null ? 'Daily Double — buzz when ready' : 'Buzzers are open!', sub: '' };
+    }
+    if (S.phase === 'reveal' && S.rev) {
+      const r = S.rev;
+      if (r.winner === p.n) return { cls: 'mine', label: '+' + money(r.delta).slice(1), status: 'Correct!', sub: 'The answer was ' + r.answer };
+      return { cls: 'dim', label: 'BUZZ', status: r.winner == null ? 'Nobody got it' : ((S.players.find((x) => x.n === r.winner) || {}).name || 'Someone') + ' got it', sub: 'The answer was ' + r.answer };
+    }
+    if (S.phase === 'dd') return { cls: 'dim', label: 'BUZZ', status: 'Daily Double!', sub: 'Waiting for the wager…' };
+    if (S.phase === 'final') {
+      const rank = [...S.players].sort((a, b) => b.score - a.score).findIndex((x) => x.n === p.n) + 1;
+      return { cls: rank === 1 ? 'mine' : 'dim', label: '#' + rank, status: 'Game over!', sub: rank === 1 ? 'You won!' : 'Thanks for playing.' };
+    }
+    if (S.phase === 'lobby') return { cls: 'dim', label: 'BUZZ', status: 'You’re in!', sub: 'Waiting for the host to start the board.' };
+    return { cls: 'dim', label: 'BUZZ', status: 'Watch the TV', sub: 'The host is picking the next clue.' };
+  }
+
+  let lastDrawn = '';
+  function drawPlay() {
+    const p = mine();
+    const hex = colorHex(p.color);
+    document.documentElement.style.setProperty('--me', hex);
+    document.documentElement.style.setProperty('--meText', isLight(hex) ? '#111' : '#fff');
+    $('#top .nm').textContent = p.name;
+    $('#top .sc').textContent = money(p.score);
+    const b = buttonState();
+    const key = b.cls + b.label + b.status + b.sub;
+    if (key === lastDrawn) return;
+    lastDrawn = key;
+    $('#btn').className = b.cls; $('#btn').textContent = b.label;
+    $('#status').textContent = b.status; $('#sub').textContent = b.sub;
+  }
+
+  let lastTap = 0;
+  async function tap(e) {
+    e.preventDefault();
+    if (!mine()) return;
+    const t = Date.now();
+    if (t - lastTap < 150) return;
+    lastTap = t;
+    $('#btn').classList.add('press');
+    setTimeout(() => $('#btn').classList.remove('press'), 120);
+    if (navigator.vibrate) navigator.vibrate(30);
+    try {
+      const r = await post('buzz', { id: me.id });
+      if (r.result === 'first') { myBuzz = r.attempt != null ? r.attempt : (S.q && S.q.attempt); poll(true); }
+      else if (r.result === 'early') flash = { cls: 'early', label: 'TOO SOON', status: 'Too early!', sub: 'Locked out for a second.', until: Date.now() + (r.lockMs || 1000) };
+      else if (r.result === 'early_lock') flash = { cls: 'early', label: 'WAIT', status: 'Still locked out…', sub: 'You buzzed too early.', until: Date.now() + 500 };
+      else if (r.result === 'beaten') poll(true);
+      else if (r.result === 'not_joined') { me = {}; save(me); }
+      drawPlay();
+    } catch (err) {}
+  }
+  $('#btn').addEventListener('pointerdown', tap);
+  $('#btn').addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // keep the screen on while playing
+  let lock = null;
+  async function wakeLock() { try { if (navigator.wakeLock && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { wakeLock(); poll(true); } });
+  document.addEventListener('pointerdown', wakeLock, { once: true });
+
+  // ---------------------------------------------------------------- main
+  function render() {
+    if (!S) return;
+    if (!S.game || S.phase === 'off') { editing = false; return show('wait'); }
+    const p = mine();
+    if (!p || editing) {
+      if (!editing && !$('#name').value && me.name) $('#name').value = me.name;
+      if (!p) $('#go').textContent = 'Join the game';
+      drawColors();
+      return show('join');
+    }
+    show('play');
+    drawPlay();
+  }
+
+  let timer = null, inflight = false;
+  async function poll(now) {
+    if (now) { clearTimeout(timer); }
+    if (inflight) return;
+    inflight = true;
+    try {
+      const r = await fetch('/api/jeopardy/state' + (now ? '?live=1' : ''), { cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      const s = await r.json();
+      if (!S || s.v >= S.v || s.game !== S.game) S = s;
+      if (S.q && myBuzz != null && S.q.attempt !== myBuzz) myBuzz = null;
+      if (S.phase !== 'question') myBuzz = null;
+      fails = 0; $('#conn').style.display = 'none';
+      render();
+    } catch (e) {
+      if (++fails > 4) $('#conn').style.display = 'block';
+    }
+    inflight = false;
+    clearTimeout(timer);
+    timer = setTimeout(poll, 500);
+  }
+  poll(true);
+  setInterval(() => { if (S && mine() && !editing) drawPlay(); }, 100);
+})();
+</script>
+</body>
+</html>
