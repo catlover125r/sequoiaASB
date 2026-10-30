@@ -1,7 +1,7 @@
 // Jeopardy (/jeopardy1 TV, /jeopardy1control host, /jeopardy1join players).
 // Redis keys (prefix "jeop1:"):
 //   state    JSON, written ONLY by host actions (one writer, so no races): phase, scores, current clue...
-//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, kind?: "pin", image?, pin?: {x,y} } x5] } x6], dd }   the questions
+//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, answerAudio?, kind?: "pin", image?, pin?: {x,y} } x5] } x6], dd }   the questions
 //   players  hash  secret id -> JSON { n, name, color }
 //   colors   hash  '#rrggbb' -> n (HSETNX, so two phones can't grab the same color)
 //   n        counter handing out player numbers
@@ -74,6 +74,11 @@ function cleanBoard(b) {
           if (k && k.audio) {
             if (!AUDIO_RE.test(k.audio)) throw bad('bad audio path: ' + String(k.audio).slice(0, 80));
             out.audio = k.audio;
+          }
+          // optional second track for the answer screen (e.g. the song forwards after a backwards clue)
+          if (k && k.answerAudio) {
+            if (!AUDIO_RE.test(k.answerAudio)) throw bad('bad audio path: ' + String(k.answerAudio).slice(0, 80));
+            out.answerAudio = k.answerAudio;
           }
           if (k && k.kind === 'pin') {
             if (!IMAGE_RE.test(k.image || '')) throw bad('a campus photo clue needs its photo');
@@ -274,7 +279,7 @@ function create(redis, opts) {
       return putState(s);
     }
     const isDD = s.dd.some(([x, y]) => x === c && y === r);
-    s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
+    s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, answerAudio: clue.answerAudio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
     if (isDD) s.phase = 'dd';
     else openClue(s);
     return putState(s);
@@ -358,7 +363,7 @@ function create(redis, opts) {
 
   function finish(s, winner, delta) {
     s.used[s.q.c][s.q.r] = true;
-    s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, audio: s.q.audio || null, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
+    s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, audio: s.q.answerAudio || s.q.audio || null, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
     s.q = null;
     s.phase = 'reveal';
   }

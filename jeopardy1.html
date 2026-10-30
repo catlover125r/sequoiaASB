@@ -297,7 +297,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
     const clue = s.phase === 'question' ? s.q : s.phase === 'reveal' ? s.rev : null;
     const audio = clue && clue.audio;
     if (!audio) { songWant = false; songKey = ''; fadeSong(); return; }
-    const key = s.game + ':' + clue.c + ':' + clue.r;
+    const key = s.game + ':' + clue.c + ':' + clue.r + ':' + audio;   // a new track (the answer version) starts from the top
     if (key !== songKey) { songKey = key; songReplay = 0; song.src = audio; }
     if (s.phase === 'question' && (s.q.replay || 0) !== songReplay) { songReplay = s.q.replay || 0; song.currentTime = 0; }
     songWant = !(s.phase === 'question' && s.q.buzz);

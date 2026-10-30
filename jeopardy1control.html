@@ -190,10 +190,6 @@ button:disabled{opacity:.4;cursor:default}
   #hgrid .hc{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:13px;letter-spacing:.02em;padding:4px 2px;word-break:normal;overflow-wrap:anywhere;hyphens:auto}
 }
 @media (max-width:560px){.clueRow{grid-template-columns:44px 1fr}.clueRow input{grid-column:2}}
-.edTools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:14px}
-.edTools select{padding:8px;border-radius:8px;background:#fff;color:#000;border:0}
-.edTools button{padding:9px 12px;font-size:14px;background:rgba(255,255,255,.12)}
-#json{width:100%;min-height:180px;border-radius:10px;padding:10px;font:12px ui-monospace,Menlo,monospace;color:#000;background:#fff;border:0}
 
 #ask{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
 #ask.on{display:flex}
@@ -355,17 +351,6 @@ button:disabled{opacity:.4;cursor:default}
 <section class="ov" id="editOv">
   <div class="ovIn">
     <div class="ovHead"><h2>Questions</h2><button type="button" id="edClose">Close</button><button type="button" class="prim" id="edSave">Save</button></div>
-    <div class="edTools">
-      <label>Daily Doubles per game <select id="edDD"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
-      <button type="button" id="edReset">Reset to placeholders</button>
-      <button type="button" id="edJsonBtn">Import / export</button>
-    </div>
-    <div id="edJsonBox" style="display:none;margin-bottom:12px">
-      <div class="note" style="margin-bottom:6px">Copy this to back up the board, or paste a board here and press Load.</div>
-      <textarea id="json" spellcheck="false"></textarea>
-      <button type="button" class="ghost" id="edLoad" style="margin-top:6px">Load</button>
-    </div>
-    <div class="note" style="margin-bottom:10px">Saved questions are stored on the server, never in the public code. The answer is only shown on this host page.</div>
     <div id="edCats"></div>
   </div>
 </section>
@@ -645,14 +630,15 @@ button:disabled{opacity:.4;cursor:default}
   $('#mOut').onclick = () => { $('#menuOv').classList.remove('on'); signOut(); };
 
   // ---------------------------------------------------------------- questions editor
-  let edDirty = false, edExtra = [], spotAt = null;
+  let edDirty = false, edExtra = [], edDD = 1, spotAt = null;
   const preview = new Audio();
   function edDraw(b) {
-    $('#edDD').value = String(b.dd);
+    edDD = b.dd;
     // songs and campus photos can't be typed in here; they ride along with their square
     edExtra = b.cats.map((cat) => cat.clues.map((k) => {
       const x = {};
       if (k && k.audio) x.audio = k.audio;
+      if (k && k.answerAudio) x.answerAudio = k.answerAudio;
       if (k && k.kind === 'pin') Object.assign(x, { kind: 'pin', image: k.image, pin: k.pin || null });
       return x;
     }));
@@ -663,12 +649,13 @@ button:disabled{opacity:.4;cursor:default}
     edDirty = false;
   }
   function edRead() {
-    const b = { dd: Number($('#edDD').value), cats: [] };
+    const b = { dd: edDD, cats: [] };
     document.querySelectorAll('#edCats .cat').forEach((el, c) => {
       b.cats.push({ name: el.querySelector('.cn').value, clues: [0, 1, 2, 3, 4].map((r) => {
         const k = { q: el.querySelector(`[data-r="${r}"][data-f="q"]`).value, a: el.querySelector(`[data-r="${r}"][data-f="a"]`).value };
         const x = edExtra[c] && edExtra[c][r];
         if (x && x.audio) k.audio = x.audio;
+        if (x && x.answerAudio) k.answerAudio = x.answerAudio;
         if (x && x.kind === 'pin') Object.assign(k, { kind: 'pin', image: x.image }, x.pin ? { pin: x.pin } : {});
         return k;
       }) });
@@ -676,7 +663,7 @@ button:disabled{opacity:.4;cursor:default}
     return b;
   }
   async function edOpen() {
-    try { const r = await api('board'); edDraw(r.board); $('#edJsonBox').style.display = 'none'; $('#editOv').classList.add('on'); }
+    try { const r = await api('board'); edDraw(r.board); $('#editOv').classList.add('on'); }
     catch (e) { showErr(e.message); }
   }
   $('#bEdit').onclick = edOpen;
@@ -702,7 +689,6 @@ button:disabled{opacity:.4;cursor:default}
     preview.src = edExtra[c][r].audio; preview.currentTime = 0; preview.play().catch(() => {});
     b.classList.add('on'); b.textContent = '■ stop';
   });
-  $('#edDD').addEventListener('change', () => { edDirty = true; });
   $('#spotMap').addEventListener('pointerdown', (e) => {
     const r = $('#spotMap').getBoundingClientRect();
     const pin = { x: Math.round(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * 10000) / 10000, y: Math.round(Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) * 10000) / 10000 };
@@ -719,25 +705,6 @@ button:disabled{opacity:.4;cursor:default}
   $('#edSave').onclick = async () => {
     try { const r = await api('board', { board: edRead() }); edDraw(r.board); showErr('Saved.'); $('#err').style.background = '#14a44d'; setTimeout(() => { $('#err').style.background = ''; }, 3600); }
     catch (e) { showErr(e.message); }
-  };
-  $('#edReset').onclick = async () => {
-    if (!(await ask('Replace every question with placeholders? (Not saved until you press Save.)', 'Replace'))) return;
-    const b = { dd: 1, cats: [0, 1, 2, 3, 4, 5].map((c) => ({ name: 'Category ' + (c + 1), clues: [200, 400, 600, 800, 1000].map((v) => ({ q: `Placeholder clue for Category ${c + 1} for $${v}`, a: `Answer ${c + 1}-${v}` })) })) };
-    edDraw(b); edDirty = true;
-  };
-  $('#edJsonBtn').onclick = () => {
-    const box = $('#edJsonBox');
-    box.style.display = box.style.display === 'none' ? 'block' : 'none';
-    $('#json').value = JSON.stringify(edRead(), null, 2);
-  };
-  $('#edLoad').onclick = () => {
-    try {
-      const b = JSON.parse($('#json').value);
-      if (!b || !Array.isArray(b.cats) || b.cats.length !== 6 || b.cats.some((c) => !Array.isArray(c.clues) || c.clues.length !== 5)) throw new Error('Needs 6 categories with 5 clues each.');
-      if (b.dd == null) b.dd = 1;
-      edDraw(b); edDirty = true; $('#edJsonBox').style.display = 'none';
-      showErr('Loaded — press Save to keep it.');
-    } catch (e) { showErr('Could not read that: ' + e.message); }
   };
 
   // ---------------------------------------------------------------- poll
