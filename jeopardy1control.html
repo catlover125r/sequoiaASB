@@ -192,6 +192,7 @@ button:disabled{opacity:.4;cursor:default}
   #pLobby .qr{width:min(100%,40vh)}
   #hgrid .hc{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:13px;letter-spacing:.02em;padding:4px 2px;word-break:normal;overflow-wrap:anywhere;hyphens:auto}
 }
+.thm{display:block;width:64px;height:40px;object-fit:cover;border-radius:6px;margin-top:6px;border:1px solid rgba(255,255,255,.3)}
 .swc{display:inline-block;width:20px;height:20px;border-radius:6px;border:1px solid rgba(255,255,255,.5);margin-left:6px;vertical-align:middle}
 @media (max-width:560px){.clueRow{grid-template-columns:44px 1fr}.clueRow input{grid-column:2}}
 
@@ -665,11 +666,12 @@ button:disabled{opacity:.4;cursor:default}
       if (k && k.answerAudio) x.answerAudio = k.answerAudio;
       if (k && k.kind === 'pin') Object.assign(x, { kind: 'pin', image: k.image, pin: k.pin || null });
       if (k && k.kind === 'color') Object.assign(x, { kind: 'color', color: k.color, logo: k.logo || null });
+      if (k && k.kind === 'diagram') Object.assign(x, { kind: 'diagram', image: k.image });
       return x;
     }));
     preview.pause();
     $('#edCats').innerHTML = b.cats.map((cat, c) => `<div class="cat"><input class="cn" data-c="${c}" value="${esc(cat.name)}" placeholder="Category ${c + 1}"><input class="ci" data-c="${c}" value="${esc(cat.intro || '')}" maxlength="160" placeholder="Intro shown the first time this category is picked">
-      ${cat.clues.map((k, r) => `<div class="clueRow"><div class="v">$${(r + 1) * 200}${edExtra[c][r].audio ? `<button type="button" class="au" data-au="${c},${r}">♪ play</button>` : ''}${edExtra[c][r].kind === 'color' ? `<i class="swc" style="background:${esc(edExtra[c][r].color)}"></i>` : ''}${edExtra[c][r].kind === 'pin' ? `<button type="button" class="spot${edExtra[c][r].pin ? '' : ' unset'}" data-spot="${c},${r}">📍 ${edExtra[c][r].pin ? 'spot' : 'set'}</button>` : ''}</div><textarea data-c="${c}" data-r="${r}" data-f="q" rows="2" placeholder="Clue">${esc(k.q)}</textarea><input data-c="${c}" data-r="${r}" data-f="a" value="${esc(k.a)}" placeholder="Answer"></div>`).join('')}
+      ${cat.clues.map((k, r) => `<div class="clueRow"><div class="v">$${(r + 1) * 200}${edExtra[c][r].audio ? `<button type="button" class="au" data-au="${c},${r}">♪ play</button>` : ''}${edExtra[c][r].kind === 'diagram' ? `<img class="thm" src="${esc(edExtra[c][r].image)}" alt="">` : ''}${edExtra[c][r].kind === 'color' ? `<i class="swc" style="background:${esc(edExtra[c][r].color)}"></i>` : ''}${edExtra[c][r].kind === 'pin' ? `<button type="button" class="spot${edExtra[c][r].pin ? '' : ' unset'}" data-spot="${c},${r}">📍 ${edExtra[c][r].pin ? 'spot' : 'set'}</button>` : ''}</div><textarea data-c="${c}" data-r="${r}" data-f="q" rows="2" placeholder="Clue">${esc(k.q)}</textarea><input data-c="${c}" data-r="${r}" data-f="a" value="${esc(k.a)}" placeholder="Answer"></div>`).join('')}
     </div>`).join('');
     edDirty = false;
   }
@@ -683,6 +685,7 @@ button:disabled{opacity:.4;cursor:default}
         if (x && x.answerAudio) k.answerAudio = x.answerAudio;
         if (x && x.kind === 'pin') Object.assign(k, { kind: 'pin', image: x.image }, x.pin ? { pin: x.pin } : {});
         if (x && x.kind === 'color') Object.assign(k, { kind: 'color', color: x.color }, x.logo ? { logo: x.logo } : {});
+        if (x && x.kind === 'diagram') Object.assign(k, { kind: 'diagram', image: x.image });
         return k;
       }) });
     });

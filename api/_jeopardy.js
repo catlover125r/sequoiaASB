@@ -1,7 +1,7 @@
 // Jeopardy (/jeopardy1 TV, /jeopardy1control host, /jeopardy1join players).
 // Redis keys (prefix "jeop1:"):
 //   state    JSON, written ONLY by host actions (one writer, so no races): phase, scores, current clue...
-//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, answerAudio?, kind?: "pin" | "color", image?, pin?: {x,y} } x5] } x6], dd }   the questions
+//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, answerAudio?, kind?: "pin" | "color" | "diagram", image?, pin?: {x,y} } x5] } x6], dd }   the questions
 //   players  hash  secret id -> JSON { n, name, color }
 //   colors   hash  '#rrggbb' -> n (HSETNX, so two phones can't grab the same color)
 //   n        counter handing out player numbers
@@ -94,6 +94,11 @@ function cleanBoard(b) {
               out.pin = { x: round4(x), y: round4(y) };
             }
           }
+          // a picture clue (e.g. a court with one spot circled): shown big on the TV for the whole clue and the answer
+          if (k && k.kind === 'diagram') {
+            if (!IMAGE_RE.test(k.image || '')) throw bad('a diagram clue needs its picture');
+            Object.assign(out, { kind: 'diagram', image: k.image });
+          }
           if (k && k.kind === 'color') {
             if (!COLOR_RE.test(k.color || '')) throw bad('a colour clue needs a colour like #81d8d0');
             Object.assign(out, { kind: 'color', color: k.color.toLowerCase() });
@@ -185,7 +190,7 @@ function create(redis, opts) {
     if (s.phase === 'question' || s.phase === 'dd') {
       const q = s.q;
       out.q = { c: q.c, r: q.r, value: q.value, dd: q.dd, only: q.only == null ? null : q.only };
-      if (s.phase === 'question') Object.assign(out.q, { text: q.text, kind: q.kind || null, color: q.color || null, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
+      if (s.phase === 'question') Object.assign(out.q, { text: q.text, kind: q.kind || null, color: q.color || null, image: q.kind === 'diagram' ? q.image : null, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
       if (host) Object.assign(out.q, { text: q.text, answer: q.answer });
     }
     if (s.phase === 'intro') out.intro = { c: s.intro.c, name: s.cats[s.intro.c], text: s.intro.text, value: VALUES[s.pending.r] };
@@ -319,6 +324,7 @@ function create(redis, opts) {
     const isDD = s.dd.some(([x, y]) => x === c && y === r);
     s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, answerAudio: clue.answerAudio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
     if (clue.kind === 'color') Object.assign(s.q, { kind: 'color', color: clue.color, logo: clue.logo || null });
+    if (clue.kind === 'diagram') Object.assign(s.q, { kind: 'diagram', image: clue.image });
     if (isDD) s.phase = 'dd';
     else openClue(s);
     return s;
@@ -404,6 +410,7 @@ function create(redis, opts) {
     s.used[s.q.c][s.q.r] = true;
     s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, audio: s.q.answerAudio || s.q.audio || null, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
     if (s.q.kind === 'color') Object.assign(s.rev, { kind: 'color', color: s.q.color, logo: s.q.logo || null });
+    if (s.q.kind === 'diagram') Object.assign(s.rev, { kind: 'diagram', image: s.q.image });
     s.q = null;
     s.phase = 'reveal';
   }
