@@ -140,6 +140,21 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 #revA{font-size:6.5vw;color:#fff;text-transform:uppercase;margin:3vh 0;line-height:1.1;text-shadow:.2vw .2vw 0 #000;animation:pop .35s ease-out}
 #revW{font-size:3.6vw;padding:.8vw 2.4vw;border-radius:99px}
 
+/* colour clue: the whole screen is the colour; the answer screen fades the logo in */
+#clueBox.color,#revBox.color{background:var(--bg);color:var(--ink);box-shadow:none}
+#clueBox.color #clueTop b{color:var(--ink)}
+#clueBox.color #clueText{position:absolute;left:0;right:0;bottom:11vh;font-size:3.2vw;text-shadow:none;opacity:.85}
+#clueBox.color #ddBanner{color:var(--ink)}
+#revBox.color #revQ,#revBox.color #revA{color:var(--ink);text-shadow:none}
+#revBox.color #revW{box-shadow:0 0 0 .25vw var(--ink)}
+#revLogo{display:none;width:62vw;height:34vh;object-fit:contain}
+#revBox.color #revLogo{display:block;margin:2vh 0 0}
+#revBox.color.logo #revA{font-size:3.4vw;margin:2vh 0 3vh;animation:none;opacity:0}
+#revBox.color #revLogo.go{animation:logoIn 1.8s ease-out .5s both}
+#revBox.color.logo #revA.go{animation:nameIn 1s ease-out 1.9s both}
+@keyframes logoIn{0%{opacity:0;transform:scale(.88)}100%{opacity:1;transform:none}}
+@keyframes nameIn{0%{opacity:0}100%{opacity:1}}
+
 /* final */
 #final{flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#7a2bb8 0%,var(--deep) 60%,var(--night) 100%)}
 #final h1{font-weight:400;font-size:6vw;margin:0 0 4vh;color:var(--gold);text-shadow:.05em .05em 0 #000}
@@ -220,6 +235,7 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 <section class="view" id="reveal">
   <div id="revBox">
     <div id="revQ" class="serif"></div>
+    <img id="revLogo" alt="">
     <div id="revA"></div>
     <div id="revW"></div>
   </div>
@@ -363,6 +379,9 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       $('#clueText').textContent = q.text;
       $('#clueText').style.fontSize = q.audio ? '4.4vw' : clueSize(q.text);
       $('#clueEq').classList.toggle('on', !!q.audio);
+      const cb = $('#clueBox');
+      cb.classList.toggle('color', !!q.color);
+      if (q.color) { cb.style.setProperty('--bg', q.color); cb.style.setProperty('--ink', isLight(q.color) ? '#111' : '#fff'); $('#clueText').style.fontSize = ''; }
       const only = q.only != null && player(q.only);
       $('#ddBanner').style.display = only ? 'block' : 'none';
       if (only) $('#ddBanner').textContent = only.name + ' is playing for ' + money(q.value);
@@ -401,6 +420,14 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       const r = s.rev;
       $('#revQ').textContent = r.text;
       $('#revA').textContent = r.answer;
+      const rb = $('#revBox'), rl = $('#revLogo'), ra = $('#revA');
+      rb.classList.toggle('color', !!r.color);
+      rb.classList.toggle('logo', !!(r.color && r.logo));
+      rl.classList.remove('go'); ra.classList.remove('go');
+      if (r.color) {
+        rb.style.setProperty('--bg', r.color); rb.style.setProperty('--ink', isLight(r.color) ? '#111' : '#fff');
+        if (r.logo) { if (rl.getAttribute('src') !== r.logo) rl.src = r.logo; void rl.offsetWidth; rl.classList.add('go'); ra.classList.add('go'); }
+      }
       const w = r.winner != null && player(r.winner);
       const el = $('#revW');
       if (w) {

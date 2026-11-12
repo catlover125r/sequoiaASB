@@ -1,7 +1,7 @@
 // Jeopardy (/jeopardy1 TV, /jeopardy1control host, /jeopardy1join players).
 // Redis keys (prefix "jeop1:"):
 //   state    JSON, written ONLY by host actions (one writer, so no races): phase, scores, current clue...
-//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, answerAudio?, kind?: "pin", image?, pin?: {x,y} } x5] } x6], dd }   the questions
+//   board    JSON { cats: [{ name, clues: [{ q, a, audio?, answerAudio?, kind?: "pin" | "color", image?, pin?: {x,y} } x5] } x6], dd }   the questions
 //   players  hash  secret id -> JSON { n, name, color }
 //   colors   hash  '#rrggbb' -> n (HSETNX, so two phones can't grab the same color)
 //   n        counter handing out player numbers
@@ -55,6 +55,9 @@ function placeholderBoard() {
 // audio clues are mp3s shipped with the site under random names (so the URL doesn't give the song away)
 const AUDIO_RE = /^\/jeopardy1-media\/[a-z0-9-]{4,40}\.mp3$/;
 const IMAGE_RE = /^\/jeopardy1-media\/[a-z0-9-]{4,40}\.(jpg|png|webp)$/;
+// colour clues: the TV fills the screen with a colour, the answer screen fades in the brand's logo
+const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const LOGO_RE = /^\/jeopardy1-media\/[a-z0-9-]{4,40}\.(png|webp|svg)$/;
 const round4 = (v) => Math.round(v * 10000) / 10000;
 
 const bad = (msg) => Object.assign(new Error(msg), { code: 400 });
@@ -89,6 +92,14 @@ function cleanBoard(b) {
               out.pin = { x: round4(x), y: round4(y) };
             }
           }
+          if (k && k.kind === 'color') {
+            if (!COLOR_RE.test(k.color || '')) throw bad('a colour clue needs a colour like #81d8d0');
+            Object.assign(out, { kind: 'color', color: k.color.toLowerCase() });
+            if (k.logo) {
+              if (!LOGO_RE.test(k.logo)) throw bad('bad logo path: ' + String(k.logo).slice(0, 80));
+              out.logo = k.logo;
+            }
+          }
           return out;
         }),
       };
@@ -117,7 +128,7 @@ function create(redis, opts) {
   const buzzKey = (s) => P + 'buzz:' + s.game + ':' + s.q.attempt;
   const earlyKey = (s, n) => P + 'early:' + s.game + ':' + n;
   const pinsKey = (s) => P + 'pins:' + s.game + ':' + s.q.attempt;
-  const mediaOf = (board) => board.cats.flatMap((c) => c.clues.filter((k) => k.image).map((k) => k.image));
+  const mediaOf = (board) => board.cats.flatMap((c) => c.clues.flatMap((k) => [k.image, k.logo].filter(Boolean)));
   const parse = (s) => (s == null ? null : typeof s === 'string' ? JSON.parse(s) : s);
   const hgetall = async (key) => {
     const v = await redis.hgetall(key);
@@ -172,7 +183,7 @@ function create(redis, opts) {
     if (s.phase === 'question' || s.phase === 'dd') {
       const q = s.q;
       out.q = { c: q.c, r: q.r, value: q.value, dd: q.dd, only: q.only == null ? null : q.only };
-      if (s.phase === 'question') Object.assign(out.q, { text: q.text, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
+      if (s.phase === 'question') Object.assign(out.q, { text: q.text, kind: q.kind || null, color: q.color || null, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
       if (host) Object.assign(out.q, { text: q.text, answer: q.answer });
     }
     if (s.phase === 'pin') {
@@ -280,6 +291,7 @@ function create(redis, opts) {
     }
     const isDD = s.dd.some(([x, y]) => x === c && y === r);
     s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, answerAudio: clue.answerAudio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
+    if (clue.kind === 'color') Object.assign(s.q, { kind: 'color', color: clue.color, logo: clue.logo || null });
     if (isDD) s.phase = 'dd';
     else openClue(s);
     return putState(s);
@@ -364,6 +376,7 @@ function create(redis, opts) {
   function finish(s, winner, delta) {
     s.used[s.q.c][s.q.r] = true;
     s.rev = { c: s.q.c, r: s.q.r, text: s.q.text, answer: s.q.answer, audio: s.q.answerAudio || s.q.audio || null, value: s.q.value, dd: s.q.dd, winner, delta, last: s.q.last };
+    if (s.q.kind === 'color') Object.assign(s.rev, { kind: 'color', color: s.q.color, logo: s.q.logo || null });
     s.q = null;
     s.phase = 'reveal';
   }
