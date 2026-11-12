@@ -70,8 +70,10 @@ function cleanBoard(b) {
     dd: Number.isInteger(dd) && dd >= 0 && dd <= 3 ? dd : 1,
     cats: b.cats.map((cat, c) => {
       if (!cat || !Array.isArray(cat.clues) || cat.clues.length !== ROWS) throw bad('each category needs 5 clues');
+      const intro = cleanText(cat.intro, 160);   // shown on the TV the first time someone picks a square in this category
       return {
         name: cleanText(cat.name, 60) || 'Category ' + (c + 1),
+        ...(intro ? { intro } : {}),
         clues: cat.clues.map((k) => {
           const out = { q: cleanText(k && k.q, 400), a: cleanText(k && k.a, 200) };
           if (k && k.audio) {
@@ -186,6 +188,7 @@ function create(redis, opts) {
       if (s.phase === 'question') Object.assign(out.q, { text: q.text, kind: q.kind || null, color: q.color || null, audio: q.audio || null, replay: q.replay || 0, attempt: q.attempt, openAt: q.openAt, locked: q.locked, last: q.last || null, buzz });
       if (host) Object.assign(out.q, { text: q.text, answer: q.answer });
     }
+    if (s.phase === 'intro') out.intro = { c: s.intro.c, name: s.cats[s.intro.c], text: s.intro.text, value: VALUES[s.pending.r] };
     if (s.phase === 'pin') {
       const q = s.q;
       const pins = await hgetall(pinsKey(s));
@@ -234,7 +237,7 @@ function create(redis, opts) {
     if (!p) return { result: 'not_joined' };
     const q = s.q;
     const t = now();
-    const tooEarly = ['board', 'dd', 'reveal'].includes(s.phase) || (s.phase === 'question' && t < q.openAt);
+    const tooEarly = ['board', 'intro', 'dd', 'reveal'].includes(s.phase) || (s.phase === 'question' && t < q.openAt);
     if (s.phase === 'question' && q.only != null && q.only !== p.n) return { result: 'not_you' };
     if (tooEarly) {
       await redis.set(earlyKey(s, p.n), '1', { px: EARLY_MS });
@@ -258,6 +261,7 @@ function create(redis, opts) {
       phase: 'lobby', game: crypto.randomBytes(4).toString('hex'),
       cats: board.cats.map((c) => c.name),
       used: Array.from({ length: COLS }, () => Array(ROWS).fill(false)),
+      seen: Array(COLS).fill(false),
       dd: pickDailyDoubles(board.dd, board),
       media: mediaOf(board),
       scores: {}, q: null, rev: null, attempts: 0,
@@ -280,21 +284,44 @@ function create(redis, opts) {
     c = Number(c); r = Number(r);
     if (!(Number.isInteger(c) && c >= 0 && c < COLS && Number.isInteger(r) && r >= 0 && r < ROWS)) throw bad('bad square');
     if (s.used[c][r]) throw bad('already played');
+    const cat = (await getBoard()).cats[c];
+    const clue = cat.clues[r];
+    if (clue.kind === 'pin' && !clue.pin) throw bad('Set where this photo was taken first (Questions, the 📍 button).');
+    // the first square picked in a category brings up its intro; the host shows the clue when everyone has read it
+    s.seen = s.seen || [];
+    if (cat.intro && !s.seen[c]) {
+      s.seen[c] = true;
+      s.pending = { c, r };
+      s.intro = { c, text: cat.intro };
+      s.phase = 'intro';
+      return putState(s);
+    }
+    return putState(startClue(s, c, r, clue));
+  }
+
+  async function go() {
+    const s = await getState();
+    need(s, 'intro');
+    const { c, r } = s.pending;
     const clue = (await getBoard()).cats[c].clues[r];
+    s.pending = null; s.intro = null;
+    return putState(startClue(s, c, r, clue));
+  }
+
+  function startClue(s, c, r, clue) {
     if (clue.kind === 'pin') {
-      if (!clue.pin) throw bad('Set where this photo was taken first (Questions, the 📍 button).');
       s.attempts = (s.attempts || 0) + 1;
       const openAt = now() + PIN_LEAD_MS;
       s.q = { c, r, value: VALUES[r], dd: false, only: null, kind: 'pin', text: clue.q, answer: clue.a, image: clue.image, pin: clue.pin, locked: [], last: null, attempt: s.attempts, openAt, closeAt: openAt + PIN_MS };
       s.phase = 'pin';
-      return putState(s);
+      return s;
     }
     const isDD = s.dd.some(([x, y]) => x === c && y === r);
     s.q = { c, r, value: VALUES[r], dd: isDD, only: null, text: clue.q, answer: clue.a, audio: clue.audio || null, answerAudio: clue.answerAudio || null, replay: 0, locked: [], attempt: 0, openAt: 0, last: null };
     if (clue.kind === 'color') Object.assign(s.q, { kind: 'color', color: clue.color, logo: clue.logo || null });
     if (isDD) s.phase = 'dd';
     else openClue(s);
-    return putState(s);
+    return s;
   }
 
   function openClue(s, lead) {
@@ -419,9 +446,9 @@ function create(redis, opts) {
   // tapped the wrong square: back to the board, square stays playable
   async function cancel() {
     const s = await getState();
-    need(s, 'question', 'dd', 'pin');
-    if (s.q.locked.length || s.q.last) throw bad('points were already given for this clue; use Reveal instead');
-    s.q = null;
+    need(s, 'intro', 'question', 'dd', 'pin');
+    if (s.q && (s.q.locked.length || s.q.last)) throw bad('points were already given for this clue; use Reveal instead');
+    s.q = null; s.pending = null; s.intro = null;
     s.phase = 'board';
     return putState(s);
   }
@@ -467,7 +494,7 @@ function create(redis, opts) {
   }
 
   return {
-    getState, publicView, hostView, getBoard, saveBoard, join, me, buzz, replay, placePin, pinEnd,
+    getState, publicView, hostView, getBoard, saveBoard, join, me, buzz, go, replay, placePin, pinEnd,
     start, begin, select, dailyDouble, openNow, judge, reveal, cancel, next, final, adjust, kick, end,
   };
 }

@@ -247,6 +247,7 @@ label.l{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1.5
       if (r.winner === p.n) return { cls: 'mine', label: '+' + money(r.delta).slice(1), status: 'Correct!', sub: 'The answer was ' + r.answer };
       return { cls: 'dim', label: 'BUZZ', status: r.winner == null ? 'Nobody got it' : ((S.players.find((x) => x.n === r.winner) || {}).name || 'Someone') + ' got it', sub: 'The answer was ' + r.answer };
     }
+    if (S.phase === 'intro') return { cls: 'dim', label: 'BUZZ', status: 'Watch the TV', sub: 'The host is explaining this category.' };
     if (S.phase === 'dd') return { cls: 'dim', label: 'BUZZ', status: 'Daily Double!', sub: 'Waiting for the wager…' };
     if (S.phase === 'final') {
       const rank = [...S.players].sort((a, b) => b.score - a.score).findIndex((x) => x.n === p.n) + 1;

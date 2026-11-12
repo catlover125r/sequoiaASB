@@ -126,9 +126,10 @@ button:disabled{opacity:.4;cursor:default}
 #spotMap{width:min(100%,calc(52vh * 1200 / 1317));margin:0 auto;cursor:crosshair;touch-action:none}
 
 /* daily double */
-#pDD{gap:10px}
-#pDD .l{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
-#pDD .r{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;overflow:auto}
+#pDD,#pIntro{gap:10px}
+#pIntro .clue{flex:none;min-height:70px}
+#pDD .l,#pIntro .l{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+#pDD .r,#pIntro .r{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;overflow:auto}
 .ddt{font-family:Anton,Impact,sans-serif;font-size:34px;color:var(--gold);text-shadow:2px 2px 0 #000;line-height:1}
 .picks{display:flex;flex-wrap:wrap;gap:6px}
 .pick{display:flex;align-items:center;gap:6px;background:var(--card);border:2px solid var(--line);padding:8px 10px;font-size:15px}
@@ -158,6 +159,8 @@ button:disabled{opacity:.4;cursor:default}
 #menuBox button.danger{background:#5a0d18}
 
 .cat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:12px}
+.cat input.ci{width:100%;padding:8px 10px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:14px;margin-bottom:8px}
+.cat input.ci::placeholder{color:rgba(255,255,255,.5)}
 .cat input.cn{width:100%;padding:10px;border-radius:10px;border:0;background:var(--blue);color:#fff;font-size:17px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
 .clueRow{display:grid;grid-template-columns:54px 1fr 1fr;gap:6px;margin-bottom:6px;align-items:start}
 .clueRow .v{font-family:Anton,Impact,sans-serif;color:var(--gold);font-size:18px;padding-top:8px}
@@ -170,7 +173,7 @@ button:disabled{opacity:.4;cursor:default}
   #bar .anton{font-size:18px}
   #phase{display:none}
   #bar button{padding:7px 10px;font-size:13px}
-  #pQ,#pDD,#pLobby,#pPin{flex-direction:column}
+  #pQ,#pDD,#pIntro,#pLobby,#pPin{flex-direction:column}
   #pinL{flex:1;min-height:0}
   #pinR{flex:none}
   #pQ{gap:8px}
@@ -180,9 +183,9 @@ button:disabled{opacity:.4;cursor:default}
   #buzzBox{flex:none}
   #judge{flex:none;height:max(150px,27vh)}
   #judge button{font-size:16px}
-  #pDD{overflow:auto}
-  #pDD .l,#pDD .r{flex:none;overflow:visible}
-  #pDD .clue{flex:none;min-height:70px}
+  #pDD,#pIntro{overflow:auto}
+  #pDD .l,#pDD .r,#pIntro .l,#pIntro .r{flex:none;overflow:visible}
+  #pDD .clue,#pIntro .clue{flex:none;min-height:70px}
   #pLobby{overflow:auto}
   #pLobby .col{flex:none;overflow:visible}
   #pLobby .col:last-child{order:-1}
@@ -263,6 +266,18 @@ button:disabled{opacity:.4;cursor:default}
         </div>
         <button class="big" id="bDD" type="button" style="padding:13px">Show the clue</button>
         <button class="ghost" id="bDDCancel" type="button" style="padding:9px">Wrong square — back to board</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pIntro">
+      <div class="l">
+        <div class="meta" id="introMeta"></div>
+        <div class="clue" id="introHost"></div>
+        <div class="ans"><small>On the TV now</small><div>Category intro. Show the clue when everyone has read it.</div></div>
+      </div>
+      <div class="r">
+        <button class="big" id="bGo" type="button" style="padding:13px">Show the clue</button>
+        <button class="ghost" id="bIntroCancel" type="button" style="padding:9px">Wrong square — back to board</button>
       </div>
     </div>
 
@@ -379,7 +394,7 @@ button:disabled{opacity:.4;cursor:default}
   let token = ''; try { token = localStorage.getItem(TK) || ''; } catch (e) {}
   let S = null, busy = false, ddPick = null, lastKey = '';
 
-  const PHASE_LABEL = { off: 'No game', lobby: 'Players joining', board: 'Board', dd: 'Daily Double', question: 'Clue', pin: 'Campus photo', reveal: 'Answer', final: 'Final scores' };
+  const PHASE_LABEL = { off: 'No game', lobby: 'Players joining', board: 'Board', intro: 'Category intro', dd: 'Daily Double', question: 'Clue', pin: 'Campus photo', reveal: 'Answer', final: 'Final scores' };
   const colorHex = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#888');
   const player = (n) => S && S.players.find((p) => p.n === n);
   const serverNow = () => JClock.now();
@@ -467,6 +482,11 @@ button:disabled{opacity:.4;cursor:default}
       }
       $('#hgrid').innerHTML = html;
       return pane('pBoard');
+    }
+    if (s.phase === 'intro') {
+      $('#introMeta').innerHTML = esc(s.intro.name) + ' · <b>' + money(s.intro.value) + ' square</b>';
+      $('#introHost').textContent = s.intro.text;
+      return pane('pIntro');
     }
     if (s.phase === 'dd') {
       const q = s.q;
@@ -614,6 +634,8 @@ button:disabled{opacity:.4;cursor:default}
   $('#bPinCancel').onclick = () => act('cancel');
   $('#bCancel').onclick = () => act('cancel');
   $('#bDDCancel').onclick = () => act('cancel');
+  $('#bGo').onclick = () => act('go');
+  $('#bIntroCancel').onclick = () => act('cancel');
   $('#bNext').onclick = () => act('next');
   $('#bBack').onclick = () => act('begin');
   $('#bDD').onclick = () => {
@@ -646,7 +668,7 @@ button:disabled{opacity:.4;cursor:default}
       return x;
     }));
     preview.pause();
-    $('#edCats').innerHTML = b.cats.map((cat, c) => `<div class="cat"><input class="cn" data-c="${c}" value="${esc(cat.name)}" placeholder="Category ${c + 1}">
+    $('#edCats').innerHTML = b.cats.map((cat, c) => `<div class="cat"><input class="cn" data-c="${c}" value="${esc(cat.name)}" placeholder="Category ${c + 1}"><input class="ci" data-c="${c}" value="${esc(cat.intro || '')}" maxlength="160" placeholder="Intro shown the first time this category is picked">
       ${cat.clues.map((k, r) => `<div class="clueRow"><div class="v">$${(r + 1) * 200}${edExtra[c][r].audio ? `<button type="button" class="au" data-au="${c},${r}">♪ play</button>` : ''}${edExtra[c][r].kind === 'color' ? `<i class="swc" style="background:${esc(edExtra[c][r].color)}"></i>` : ''}${edExtra[c][r].kind === 'pin' ? `<button type="button" class="spot${edExtra[c][r].pin ? '' : ' unset'}" data-spot="${c},${r}">📍 ${edExtra[c][r].pin ? 'spot' : 'set'}</button>` : ''}</div><textarea data-c="${c}" data-r="${r}" data-f="q" rows="2" placeholder="Clue">${esc(k.q)}</textarea><input data-c="${c}" data-r="${r}" data-f="a" value="${esc(k.a)}" placeholder="Answer"></div>`).join('')}
     </div>`).join('');
     edDirty = false;
@@ -654,7 +676,7 @@ button:disabled{opacity:.4;cursor:default}
   function edRead() {
     const b = { dd: edDD, cats: [] };
     document.querySelectorAll('#edCats .cat').forEach((el, c) => {
-      b.cats.push({ name: el.querySelector('.cn').value, clues: [0, 1, 2, 3, 4].map((r) => {
+      b.cats.push({ name: el.querySelector('.cn').value, intro: el.querySelector('.ci').value, clues: [0, 1, 2, 3, 4].map((r) => {
         const k = { q: el.querySelector(`[data-r="${r}"][data-f="q"]`).value, a: el.querySelector(`[data-r="${r}"][data-f="a"]`).value };
         const x = edExtra[c] && edExtra[c][r];
         if (x && x.audio) k.audio = x.audio;

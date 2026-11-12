@@ -52,6 +52,13 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 .pod.ans{box-shadow:0 0 0 .3vw #fff}
 .pod.out{opacity:.4}
 
+/* category intro: first square picked in a category */
+#intro{flex-direction:column;background:var(--line)}
+#introBox{flex:1;margin:.45vw;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4vw 8vw;box-shadow:inset 0 0 3vw rgba(0,0,0,.5)}
+#introCat{font-size:7.4vw;line-height:1.05;color:var(--gold);text-transform:uppercase;text-shadow:.25vw .25vw 0 #000;animation:pop .4s ease-out}
+#introText{font-size:3.6vw;line-height:1.3;margin-top:6vh;max-width:78vw;text-shadow:.15vw .15vw 0 #000;animation:introUp .6s ease-out .35s both}
+@keyframes introUp{from{opacity:0;transform:translateY(2vh)}to{opacity:1;transform:none}}
+
 /* clue */
 #clue{flex-direction:column;background:var(--line)}
 #clueBox{position:relative;flex:1;margin:.45vw;background:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vw 7vw;box-shadow:inset 0 0 3vw rgba(0,0,0,.5)}
@@ -185,6 +192,14 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
 
 <section class="view" id="board">
   <div id="grid"></div>
+  <div class="scores"></div>
+</section>
+
+<section class="view" id="intro">
+  <div id="introBox">
+    <div id="introCat"></div>
+    <div id="introText" class="serif"></div>
+  </div>
   <div class="scores"></div>
 </section>
 
@@ -355,6 +370,13 @@ body{background:var(--night);color:#fff;font-family:Anton,Impact,"Arial Narrow B
       $('#grid').innerHTML = html;
       fillScores(s);
       return show('board');
+    }
+    if (phase === 'intro') {
+      $('#introCat').textContent = s.intro.name;
+      $('#introText').textContent = s.intro.text;
+      if (!prev || prev.phase !== 'intro') for (const id of ['#introCat', '#introText']) { $(id).style.animation = 'none'; void $(id).offsetWidth; $(id).style.animation = ''; }
+      fillScores(s, null);
+      return show('intro');
     }
     if (phase === 'dd') {
       $('#dd .sub').textContent = s.cats[s.q.c];
