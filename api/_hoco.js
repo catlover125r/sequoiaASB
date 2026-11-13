@@ -94,6 +94,12 @@ async function currentUser(req) {
   return role ? { email: p.email, role } : null;
 }
 
+// Who is signed in (their email), whatever their role. Events decide roles per event (see _events.js).
+function sessionEmail(req) {
+  const p = verifyToken(cookies(req)[COOKIE]);
+  return p && p.email ? String(p.email).toLowerCase() : null;
+}
+
 // ------------------------------------------------------ Google sign-in
 async function verifyGoogle(credential) {
   const { OAuth2Client } = require('google-auth-library');
@@ -234,4 +240,4 @@ function getStore() {
   return null;
 }
 
-module.exports = { getRoster, rosterAgeMs, rosterApply, resetRoster, roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal, resetHelperCache };
+module.exports = { sessionEmail, getRoster, rosterAgeMs, rosterApply, resetRoster, roleFor, setSession, clearSession, currentUser, verifyGoogle, devLoginAllowed, getStore, normId, isLocal, resetHelperCache };

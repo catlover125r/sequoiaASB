@@ -23,6 +23,10 @@ const parse = (s) => (s == null ? null : typeof s === 'string' ? JSON.parse(s) :
  */
 function create(redis, sheet, hooks, opts) {
   const P = (opts && opts.prefix) || 'hoco:';   // tests use their own prefix so they never touch real data
+  // PUSHED mode (opts.pushed): the sheet is not reachable from here. Instead the sheet's own script calls us about once a
+  // minute: it hands over the ticket list (ingest), collects the check-ins waiting for it (outbox) and confirms them (ack).
+  // So nothing in this file ever calls the sheet: pull / flush / tick do nothing.
+  const PUSHED = !!(opts && opts.pushed);
   const R_ROSTER = P + 'roster', R_CI = P + 'ci', R_DIRTY = P + 'dirty', R_EVENTS = P + 'events', R_META = P + 'meta';
   const bg = (p) => {
     const safe = p.catch((e) => console.error('hoco background task failed:', e && e.message));
@@ -41,32 +45,43 @@ function create(redis, sheet, hooks, opts) {
   const unlock = (name) => redis.del(P + 'lock:' + name);
 
   // ---------------------------------------------------------------- PULL: sheet -> Redis
+  // Put a ticket list (from the sheet) into Redis: swap the roster in one step and pick up check-ins the sheet already has.
+  async function loadRoster(list) {
+    const roster = {};
+    // agreed: true / false from the sheet's "Agreement" column, or null when the sheet doesn't say (older script):
+    // only an explicit false holds a student at the door.
+    // npl: true when the student is on the school's NPL list (the sheet's "AVP/NPL" tab); older script = false = never held
+    // guest: the name from the sheet's "Guest Name" column when the student bought a guest ticket ('' = no guest)
+    // no: the sheet's "Ticket #" (shown on the ticket; '' when the sheet has none)
+    list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null, guest: typeof t.guest === 'string' ? t.guest.trim() : '', npl: t.npl === true, ...(t.no ? { no: String(t.no) } : {}) }); });
+    const tmp = R_ROSTER + ':tmp';
+    await redis.del(tmp);
+    if (list.length) {
+      await redis.hset(tmp, roster);
+      await redis.rename(tmp, R_ROSTER);          // swap the whole roster in one step
+    } else {
+      await redis.del(R_ROSTER);
+    }
+    // Check-ins that are already in the sheet but not here (e.g. the very first load). We skip students with
+    // changes still waiting to be pushed, otherwise an undo would be "undone" by the older sheet copy.
+    const pushing = await redis.exists(P + 'lock:push');
+    if (!pushing) {
+      const dirty = new Set(await redis.smembers(R_DIRTY));
+      const todo = list.filter((t) => t.checkedIn && !dirty.has(t.id));
+      for (let i = 0; i < todo.length; i += 100) {
+        await Promise.all(todo.slice(i, i + 100).map((t) => redis.hsetnx(R_CI, t.id, JSON.stringify({ at: t.at || new Date().toISOString(), by: 'sheet' }))));
+      }
+    }
+    await redis.hset(R_META, { rosterAt: String(Date.now()), rosterSize: String(list.length), pullError: '' });
+  }
+
   async function pull() {
+    if (PUSHED) return { skipped: true };
     if (!(await lock('pull', 45))) return { skipped: true };
     try {
       const list = await sheet.list();
       if (!list.length) throw new Error('the sheet returned no tickets; keeping the current roster');
-      const roster = {};
-      // agreed: true / false from the sheet's "Agreement" column, or null when the sheet doesn't say (older script):
-      // only an explicit false holds a student at the door.
-      // npl: true when the student is on the school's NPL list (the sheet's "AVP/NPL" tab); older script = false = never held
-      // guest: the name from the sheet's "Guest Name" column when the student bought a guest ticket ('' = no guest)
-      list.forEach((t) => { roster[t.id] = JSON.stringify({ name: t.name, first: t.first || '', last: t.last || '', agreed: typeof t.agreed === 'boolean' ? t.agreed : null, guest: typeof t.guest === 'string' ? t.guest.trim() : '', npl: t.npl === true }); });
-      const tmp = R_ROSTER + ':tmp';
-      await redis.del(tmp);
-      await redis.hset(tmp, roster);
-      await redis.rename(tmp, R_ROSTER);          // swap the whole roster in one step
-      // Check-ins that are already in the sheet but not here (e.g. the very first load). We skip students with
-      // changes still waiting to be pushed, otherwise an undo would be "undone" by the older sheet copy.
-      const pushing = await redis.exists(P + 'lock:push');
-      if (!pushing) {
-        const dirty = new Set(await redis.smembers(R_DIRTY));
-        const todo = list.filter((t) => t.checkedIn && !dirty.has(t.id));
-        for (let i = 0; i < todo.length; i += 100) {
-          await Promise.all(todo.slice(i, i + 100).map((t) => redis.hsetnx(R_CI, t.id, JSON.stringify({ at: t.at || new Date().toISOString(), by: 'sheet' }))));
-        }
-      }
-      await redis.hset(R_META, { rosterAt: String(Date.now()), rosterSize: String(list.length), pullError: '' });
+      await loadRoster(list);
       return { ok: true, tickets: list.length };
     } catch (e) {
       await redis.hset(R_META, { pullError: String(e.message).slice(0, 300) }).catch(() => {});
@@ -76,8 +91,43 @@ function create(redis, sheet, hooks, opts) {
     }
   }
 
+  // ---------------------------------------------------------------- PUSHED mode: the sheet's script calls these
+  // ingest: the script hands over the whole ticket list.
+  async function ingest(list) {
+    await loadRoster(list);
+    return { ok: true, tickets: list.length };
+  }
+  // outbox: what the script must write into the sheet. Nothing is forgotten here; the script confirms with ack().
+  //   changes: [{id, checked, at, by, tok}]   tok = the exact check-in state this change describes
+  //   events:  [{seq, t, a, id, name, by}]    seq counts up for ever, so the script can skip lines it already wrote
+  async function outbox() {
+    const [ids, nEv, meta] = await Promise.all([redis.smembers(R_DIRTY), redis.llen(R_EVENTS), hgetall(R_META)]);
+    const base = Number(meta.evBase || 0);
+    const state = await Promise.all(ids.map((id) => redis.hget(R_CI, id)));
+    const events = nEv ? (await redis.lrange(R_EVENTS, 0, nEv - 1)).map((e, k) => ({ seq: base + k + 1, ...parse(e) })) : [];
+    const changes = ids.map((id, k) => { const r = parse(state[k]); return { id, checked: !!r, at: r ? r.at : '', by: r ? r.by : '', tok: state[k] == null ? '' : String(state[k]) }; });
+    return { changes, events };
+  }
+  // ack: the script wrote these into the sheet. A change is only forgotten if the student's state is still the one we sent.
+  async function ack(toks, seq) {
+    const ids = Object.keys(toks || {});
+    if (ids.length) {
+      const now = await Promise.all(ids.map((id) => redis.hget(R_CI, id)));
+      const settled = ids.filter((id, k) => (now[k] == null ? '' : String(now[k])) === String(toks[id]));
+      if (settled.length) await redis.srem(R_DIRTY, ...settled);
+    }
+    const base = Number((await hgetall(R_META)).evBase || 0), n = Math.floor(Number(seq) || 0) - base;
+    if (n > 0) {
+      const have = await redis.llen(R_EVENTS), cut = Math.min(n, have);
+      if (cut > 0) { await redis.ltrim(R_EVENTS, cut, -1); await redis.hset(R_META, { evBase: String(base + cut) }); }
+    }
+    await redis.hset(R_META, { pushAt: String(Date.now()), pushError: '' });
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------- PUSH: Redis -> sheet
   async function flush() {
+    if (PUSHED) return { skipped: true };
     if (!(await lock('push', 60))) return { skipped: true };
     try {
       const ids = await redis.smembers(R_DIRTY);
@@ -104,6 +154,7 @@ function create(redis, sheet, hooks, opts) {
 
   // one push is scheduled per few-second window, so a burst of check-ins goes to the sheet as ONE batch
   async function pushSoon() {
+    if (PUSHED) return;
     if (!(await lock('soon', 5))) return;
     await sleep(PUSH_DELAY_MS);
     await flush();
@@ -111,6 +162,7 @@ function create(redis, sheet, hooks, opts) {
 
   // ---------------------------------------------------------------- housekeeping (runs on admin polls)
   async function tick() {
+    if (PUSHED) return;
     const meta = await hgetall(R_META);
     const rosterAt = Number(meta.rosterAt || 0), pushAt = Number(meta.pushAt || 0);
     if (!rosterAt || Date.now() - rosterAt > PULL_EVERY_MS) bg(pull());
@@ -121,6 +173,7 @@ function create(redis, sheet, hooks, opts) {
   // If another request is already loading it (it holds the pull lock), WAIT for it instead of answering
   // "no ticket" for a student who does have one.
   async function ensureRoster() {
+    if (PUSHED) return;                               // the sheet fills the roster; an empty one just means no tickets yet
     if (await redis.hlen(R_ROSTER)) return;
     const res = await pull();
     if (res && res.skipped) {
@@ -154,7 +207,7 @@ function create(redis, sheet, hooks, opts) {
     if (await redis.hget(R_CI, id)) return null;       // already in: let check-in answer "already checked in"
     const [seen, meta] = await Promise.all([redis.get(P + 'held:' + id), hgetall(R_META)]);
     redis.set(P + 'held:' + id, '1', { ex: 900 }).catch(() => {});
-    if (Date.now() - Number(meta.rosterAt || 0) > REFRESH_GAP_MS) {
+    if (!PUSHED && Date.now() - Number(meta.rosterAt || 0) > REFRESH_GAP_MS) {
       if (!seen) bg(pull());
       else {
         try { await pull(); } catch (e) { /* sheet slow or down: judge on what we have */ }
@@ -215,7 +268,7 @@ function create(redis, sheet, hooks, opts) {
     const out = [];
     for (const id of Object.keys(roster || {})) {
       const r = parse(roster[id]), c = ci && ci[id] ? parse(ci[id]) : null;
-      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null, agreed: r.agreed !== false, npl: r.npl === true });
+      out.push({ id, name: r.name, first: r.first, last: r.last, checkedIn: !!c, at: c ? c.at : null, agreed: r.agreed !== false, npl: r.npl === true });   // (guest / ticket # stay server-side: see entry())
     }
     return out;
   }
@@ -234,7 +287,10 @@ function create(redis, sheet, hooks, opts) {
     return { pulled, pushed, ...(await status()) };
   }
 
-  return { fast: true, lookup, checkin, uncheckin, list, helpers: () => sheet.helpers(), tick, sync, status, pull, flush, _bg: bg };
+  // one student's roster record (name, ticket #, guest...), or null: used to build their ticket
+  const entry = (id) => (PUSHED ? redis.hget(R_ROSTER, id).then(parse) : rosterEntry(id));
+
+  return { fast: true, pushed: PUSHED, count: () => redis.hlen(R_ROSTER), lookup, checkin, uncheckin, list, helpers: () => sheet.helpers(), tick, sync, status, pull, flush, ingest, outbox, ack, entry, _bg: bg };
 }
 
 module.exports = { create };

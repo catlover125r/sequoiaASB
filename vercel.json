@@ -5,6 +5,10 @@
     {
       "source": "/t/:code",
       "destination": "/api/ticket?c=:code"
+    },
+    {
+      "source": "/checkin",
+      "destination": "/hocotickets"
     }
   ],
   "redirects": [
@@ -30,6 +34,32 @@
   "headers": [
     {
       "source": "/hocotickets",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/checkin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/tickets",
       "headers": [
         {
           "key": "X-Robots-Tag",

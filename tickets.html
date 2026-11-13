@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#4a0d67">
+<title>Event tickets</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--purple:#4a0d67;--ink:#241030;--soft:#6b5a78;--line:#e4daec;--page:#f3eef7;--card:#fff;--ok:#1b7f48;--warnbg:#fff4d6;--warnink:#6a4b00;color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--page);color:var(--ink);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--purple)}
+.top{background:var(--purple);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 16px}
+.top img{width:30px;height:30px}
+.top h1{font-size:17px;margin:0;flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top button{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:99px;padding:6px 13px;font-size:14px}
+.top button:hover{background:rgba(255,255,255,.3)}
+main{max-width:1040px;margin:0 auto;padding:20px 16px 60px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--card);border-radius:16px;padding:20px;box-shadow:0 1px 8px rgba(60,20,90,.08)}
+h2{font-size:26px;margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--soft);margin:0 0 12px;font-weight:700}
+.sub{color:var(--soft);margin:0}
+.btn{display:inline-block;background:var(--purple);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:600;text-decoration:none;font-size:15px}
+.btn:hover{background:#5d1681}
+.btn.ghost{background:#fff;color:var(--purple);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.ghost:hover{background:#faf6fd}
+.btn[disabled]{opacity:.45;cursor:default}
+
+/* sign in */
+#signin{text-align:center;padding-top:9vh}
+#signin .card{max-width:420px;margin:0 auto;padding:32px 24px}
+#signin img{width:72px;height:72px}
+#gbtn{min-height:44px;display:flex;justify-content:center;margin-top:20px}
+#signmsg{min-height:1.4em;margin-top:14px;color:#a02222;font-size:15px}
+
+/* events */
+#evlist{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));margin-top:16px}
+.ev{text-align:left;border:0;background:var(--card);border-radius:16px;padding:18px 20px;box-shadow:0 1px 8px rgba(60,20,90,.08)}
+.ev:hover{box-shadow:0 3px 16px rgba(60,20,90,.16)}
+.ev b{display:block;font-size:19px}
+.ev small{display:block;color:var(--soft);margin-top:2px;font-size:14px}
+.empty{margin-top:16px}
+.empty ol{margin:10px 0 0;padding-left:22px}
+.empty li{margin:4px 0}
+
+/* one event */
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px}
+.head div:first-child{flex:1;min-width:240px}
+.head .links{display:flex;gap:8px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.stat{background:var(--card);border-radius:14px;padding:14px 16px;box-shadow:0 1px 8px rgba(60,20,90,.08)}
+.stat b{display:block;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-size:13px;color:var(--soft)}
+.note{background:var(--warnbg);color:var(--warnink);border-radius:12px;padding:11px 14px;margin:0 0 12px;font-size:15px}
+.note.good{background:#e6f5ec;color:#145c35}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start;margin-top:4px}
+.field{margin:0 0 18px}
+.field>label,.field>.lab{display:block;font-weight:600;margin-bottom:6px}
+.field small{display:block;color:var(--soft);font-size:14px;margin-top:5px}
+.styles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.styles label{display:block;border-radius:12px;box-shadow:inset 0 0 0 1.5px var(--line);padding:11px 12px;cursor:pointer}
+.styles input{position:absolute;opacity:0;pointer-events:none}
+.styles label b{display:block;font-size:15px}
+.styles label span{display:block;font-size:13px;color:var(--soft);margin-top:2px}
+.styles label.on{box-shadow:inset 0 0 0 2px var(--purple);background:#faf6fd}
+.styles label:focus-within{outline:2px solid var(--purple);outline-offset:2px}
+#drop{display:flex;align-items:center;gap:14px;border-radius:12px;border:1.5px dashed #c9b8d8;padding:14px;background:#fcfaff}
+#drop.over{border-color:var(--purple);background:#f4ecfa}
+#thumb{width:72px;height:48px;border-radius:8px;background:#eee4f4 center/cover no-repeat;flex:none}
+.row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.row label{display:flex;align-items:center;gap:8px;font-weight:500}
+input[type=color]{width:44px;height:32px;padding:0;border:1.5px solid var(--line);border-radius:8px;background:#fff}
+input[type=range]{width:100%;accent-color:var(--purple)}
+.seg{display:inline-flex;border-radius:10px;box-shadow:inset 0 0 0 1.5px var(--line);overflow:hidden}
+.seg button{border:0;background:transparent;padding:7px 14px;font-size:15px}
+.seg button.on{background:var(--purple);color:#fff}
+.save{display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:16px}
+#saved{font-size:14px;color:var(--ok)}
+
+/* the ticket preview */
+.pv{position:sticky;top:16px}
+.pass{position:relative;width:320px;max-width:100%;margin:0 auto;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(30,10,50,.28);aspect-ratio:320/440;display:flex;flex-direction:column;font-family:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+.pass .bgimg{position:absolute;inset:-24px;background:center/cover no-repeat;filter:blur(14px);display:none}
+.pass>*:not(.bgimg){position:relative}
+.pass .hd{display:flex;align-items:center;gap:8px;padding:10px 12px 8px}
+.pass .hd img{width:30px;height:30px}
+.pass .hd span{font-size:16px}
+.pass .strip{height:84px;background:center/cover no-repeat;display:none;align-items:center;padding:0 14px}
+.pass .prim{font-size:30px;line-height:1.05;font-weight:300;padding:6px 14px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pass .strip .prim{padding:0;text-shadow:0 1px 6px rgba(0,0,0,.25)}
+.pass .flds{display:flex;justify-content:space-between;gap:10px;padding:8px 14px 0}
+.pass .f{min-width:0}
+.pass .f:last-child:not(:first-child){text-align:right}
+.pass .f small{display:block;font-size:10px;font-weight:600;letter-spacing:.04em}
+.pass .f span{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pass .bc{margin:auto auto 14px;background:#fff;border-radius:8px;padding:10px 14px 5px;text-align:center}
+.pass .bc svg{display:block;width:190px;height:52px}
+.pass .bc span{display:block;font-size:11px;color:#111;margin-top:3px}
+.pvnote{font-size:13px;color:var(--soft);text-align:center;margin:12px 6px 0}
+
+@media (max-width:860px){.cols{grid-template-columns:1fr}.pv{position:static;order:-1}.stats{grid-template-columns:repeat(2,1fr)}.styles{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top"><img src="/icon-192.png" alt=""><h1 id="topT">Event tickets</h1><button id="back" hidden>All events</button><button id="out" hidden>Sign out</button></div>
+<main>
+
+<div id="signin" class="view on">
+  <div class="card">
+    <img src="/icon-192.png" alt="">
+    <h2 style="margin-top:10px">Event tickets</h2>
+    <p class="sub">For the people who run Sequoia ASB events</p>
+    <div id="gbtn"></div>
+    <div id="signmsg"></div>
+  </div>
+</div>
+
+<div id="events" class="view">
+  <h2>Your events</h2>
+  <p class="sub">Every event is run from its own copy of the ASB ticket sheet.</p>
+  <div id="evlist"></div>
+  <div class="card empty" id="noev" hidden>
+    <b>No events yet for this account.</b>
+    <ol>
+      <li>Open the ASB ticket sheet in Google Drive and choose File &gt; Make a copy.</li>
+      <li>Fill in the Settings tab, then choose Tickets &gt; Turn on in the copy.</li>
+      <li>Come back here. The event shows up within a minute.</li>
+    </ol>
+  </div>
+</div>
+
+<div id="event" class="view">
+  <div class="head">
+    <div><h2 id="evName"></h2><p class="sub" id="evWhen"></p></div>
+    <div class="links"><a class="btn ghost" id="sheetLink" target="_blank" rel="noopener">Open the sheet</a><a class="btn" id="doorLink" href="/checkin">Open check-in</a></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="sTickets">0</b><span>tickets</span></div>
+    <div class="stat"><b id="sEmailed">0</b><span>emailed</span></div>
+    <div class="stat"><b id="sIn">0</b><span>checked in</span></div>
+    <div class="stat"><b id="sSeen">-</b><span>since the sheet called in</span></div>
+  </div>
+  <div id="notes"></div>
+
+  <div class="cols">
+    <div class="card">
+      <h3>Ticket design</h3>
+      <div class="field">
+        <div class="lab">Look</div>
+        <div class="styles" id="styles">
+          <label><input type="radio" name="style" value="plain"><b>Plain color</b><span>No picture needed</span></label>
+          <label><input type="radio" name="style" value="background"><b>Background</b><span>Your art fills the ticket, softly blurred</span></label>
+          <label><input type="radio" name="style" value="banner"><b>Banner</b><span>Your art, sharp, across the top</span></label>
+        </div>
+      </div>
+      <div class="field" id="artField">
+        <div class="lab">Picture</div>
+        <div id="drop"><div id="thumb"></div><div><button class="btn ghost" id="pickBtn" type="button">Choose a picture</button><input type="file" id="file" accept="image/*" hidden><small id="artHint">Export the art from Canva as a PNG or JPG, then choose it here or drag it in.</small></div></div>
+      </div>
+      <div class="field" id="posField" hidden>
+        <label for="pos">Which part of the picture shows</label>
+        <input type="range" id="pos" min="0" max="100" value="50">
+      </div>
+      <div class="field" id="titleField" hidden>
+        <div class="row"><label><input type="checkbox" id="title"> Write the event name over the banner</label></div>
+        <small>Leave this off when the name is already part of the picture.</small>
+      </div>
+      <div class="field">
+        <div class="lab">Colors</div>
+        <div class="row">
+          <label><input type="color" id="bg"> <span id="bgLab">Ticket color</span></label>
+          <div class="seg" id="tone"><button type="button" data-t="light">Light text</button><button type="button" data-t="dark">Dark text</button></div>
+        </div>
+        <small id="colorHint">When you choose a picture, these are picked to match it. Change them if you like.</small>
+      </div>
+      <div class="save">
+        <button class="btn" id="saveBtn" type="button">Save the design</button>
+        <a class="btn ghost" id="sampleBtn">Download a sample ticket</a>
+        <span id="saved"></span>
+      </div>
+    </div>
+
+    <div class="pv">
+      <div class="pass" id="pass">
+        <div class="bgimg" id="pBg"></div>
+        <div class="hd"><img src="/icon-192.png" alt=""><span id="pOrg">Sequoia ASB</span></div>
+        <div class="strip" id="pStrip"><div class="prim" id="pPrim2"></div></div>
+        <div class="prim" id="pPrim"></div>
+        <div class="flds" id="pSec"></div>
+        <div class="flds"><div class="f"><small>ID #</small><span>818000</span></div><div class="f"><small>TICKET #</small><span>42</span></div><div class="f"><small>STUDENT</small><span>Sample Student</span></div></div>
+        <div class="bc"><svg id="pBars" viewBox="0 0 190 52" preserveAspectRatio="none"></svg><span>818000</span></div>
+      </div>
+      <p class="pvnote">A close sketch. For the real thing, save and download a sample ticket on an iPhone.</p>
+    </div>
+  </div>
+</div>
+
+</main>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var account = null, events = [], cur = null, info = null, timer = null;
+  // the design being edited; art = {fileName: base64} only when a new picture was chosen
+  var d = null, src = null, newArt = false, dirty = false;
+
+  function api(action, body, ev) {
+    var opt = { credentials: 'same-origin', headers: { 'X-Requested-With': 'hoco', 'Content-Type': 'application/json' } };
+    if (body !== undefined) { opt.method = 'POST'; opt.body = JSON.stringify(body); }
+    return fetch('/api/hoco/' + action + (ev ? '?ev=' + encodeURIComponent(ev) : ''), opt).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
+    });
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function show(id) {
+    ['signin', 'events', 'event'].forEach(function (v) { $('#' + v).classList.toggle('on', v === id); });
+    $('#out').hidden = id === 'signin';
+    $('#back').hidden = !(id === 'event' && events.length > 1);
+    if (id !== 'event') { clearTimeout(timer); $('#topT').textContent = 'Event tickets'; }
+  }
+
+  /* ---------------------------------------------------------- sign in */
+  var gLoaded = false;
+  function login(body) {
+    return api('login', body).then(function (r) {
+      if (r.status === 200) return enter(r.body);
+      $('#signmsg').textContent = r.status === 403 ? "This Google account doesn't run any events. Ask the activities director to add you to the event's Staff tab as Admin."
+        : r.status === 503 ? 'Sign-in is not set up yet.' : 'Sign-in failed. Please try again.';
+    });
+  }
+  function initGoogle() {
+    $('#gbtn').innerHTML = '';
+    api('config').then(function (r) {
+      var cfg = r.body;
+      if (cfg.dev) {
+        ['cuhalde@test.local', 'helper@test.local', 'nobody@test.local'].forEach(function (e) {
+          var b = document.createElement('button'); b.className = 'btn ghost'; b.style.margin = '4px'; b.textContent = e;
+          b.onclick = function () { login({ dev: e }); }; $('#gbtn').appendChild(b);
+        });
+      }
+      if (!cfg.clientId) { if (!cfg.dev) $('#signmsg').textContent = 'Sign-in is not set up yet.'; return; }
+      function render() {
+        google.accounts.id.initialize({ client_id: cfg.clientId, callback: function (resp) { login({ credential: resp.credential }); } });
+        google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill' });
+      }
+      if (gLoaded) return render();
+      var s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+      s.onload = function () { gLoaded = true; render(); };
+      s.onerror = function () { $('#signmsg').textContent = "Couldn't load Google sign-in. Check your connection."; };
+      document.head.appendChild(s);
+    });
+  }
+  function signedOut(msg) { account = null; cur = null; show('signin'); $('#signmsg').textContent = msg || ''; initGoogle(); }
+  $('#out').onclick = function () { api('logout', {}).then(function () { signedOut(''); }); };
+  $('#back').onclick = function () { if (leaveOk()) listEvents(); };
+
+  /* ----------------------------------------------------------- events */
+  function enter(who) {
+    account = who;
+    events = (who.events || []).filter(function (e) { return e.role === 'admin'; });
+    var want = location.hash.slice(1), again = events.filter(function (e) { return e.ev === want; })[0];
+    if (again) return openEvent(again);
+    if (events.length === 1) return openEvent(events[0]);
+    listEvents();
+  }
+  function listEvents() {
+    cur = null; history.replaceState(null, '', location.pathname);
+    $('#evlist').innerHTML = events.map(function (e, i) {
+      return '<button class="ev" data-i="' + i + '"><b>' + esc(e.name) + '</b><small>' + esc([e.when, e.place].filter(Boolean).join(' · ') || 'No date set') + '</small></button>';
+    }).join('');
+    $('#noev').hidden = events.length > 0;
+    show('events');
+  }
+  $('#evlist').onclick = function (e) {
+    var b = e.target.closest ? e.target.closest('.ev') : null;
+    if (b) openEvent(events[Number(b.getAttribute('data-i'))]);
+  };
+  function leaveOk() { return !dirty || confirm('The design has changes that are not saved. Leave anyway?'); }
+
+  /* -------------------------------------------------------- one event */
+  function ago(iso) {
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    return s < 90 ? Math.round(s) + ' s' : s < 5400 ? Math.round(s / 60) + ' min' : s < 172800 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' days';
+  }
+  function openEvent(e) {
+    cur = e; d = null; src = null; newArt = false; dirty = false;
+    history.replaceState(null, '', '#' + e.ev);
+    $('#saved').textContent = '';
+    show('event');
+    refresh(true);
+  }
+  function refresh(first) {
+    clearTimeout(timer);
+    if (!cur) return;
+    var ev = cur.ev;
+    api('event', undefined, ev).then(function (r) {
+      if (!cur || cur.ev !== ev) return;
+      if (r.status === 401) return signedOut('Please sign in again.');
+      if (r.status !== 200) { $('#notes').innerHTML = '<p class="note">Couldn\'t load this event just now. Retrying.</p>'; timer = setTimeout(refresh, 8000); return; }
+      info = r.body;
+      paintInfo();
+      if (first || !d) { d = { style: info.design.style, bg: info.design.bg, fg: info.design.fg, label: info.design.label, title: info.design.title }; src = null; newArt = false; paintForm(); }
+      timer = setTimeout(refresh, 20000);
+    }, function () { timer = setTimeout(refresh, 8000); });
+  }
+  function paintInfo() {
+    var s = info.settings;
+    $('#topT').textContent = s.name;
+    $('#evName').textContent = s.name;
+    $('#evWhen').textContent = [s.tagline, s.when, s.place].filter(Boolean).join(' · ') || 'Add the date and place on the sheet\'s Settings tab.';
+    $('#sheetLink').hidden = !info.sheetUrl; if (info.sheetUrl) $('#sheetLink').href = info.sheetUrl;
+    $('#sTickets').textContent = info.tickets; $('#sEmailed').textContent = info.emailed; $('#sIn').textContent = info.checkedIn;
+    $('#sSeen').textContent = ago(info.sheetSeenAt);
+    var notes = [], quiet = Date.now() - new Date(info.sheetSeenAt).getTime() > 40 * 60000;
+    if (quiet) notes.push('The sheet has not called in for ' + ago(info.sheetSeenAt) + '. If the event is still coming up, open the sheet and choose Tickets &gt; Turn on.');
+    if (!info.autoSend && info.tickets > info.emailed) notes.push((info.tickets - info.emailed) + ' ticket' + (info.tickets - info.emailed === 1 ? ' has' : 's have') + ' not been emailed. When the design is ready, open the sheet and choose Tickets &gt; Start sending tickets.');
+    if (!info.wallet) notes.push('Apple Wallet tickets are off (the signing certificate is missing or has expired). Students get a barcode page instead, which still scans at the door. Whoever looks after the website can fix this.');
+    else if (info.walletExpires && new Date(info.walletExpires).getTime() - Date.now() < 75 * 86400000) notes.push('The Apple Wallet certificate expires on ' + new Date(info.walletExpires).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' }) + '. After that, tickets fall back to the barcode page until it is renewed.');
+    $('#notes').innerHTML = notes.map(function (n) { return '<p class="note">' + n + '</p>'; }).join('') ||
+      (info.autoSend ? '<p class="note good">Running by itself: new rows on the sheet are emailed their ticket within a few minutes.</p>' : '');
+    $('#sampleBtn').hidden = !info.wallet;
+    $('#sampleBtn').href = '/api/hoco/samplepass?ev=' + encodeURIComponent(cur.ev);
+    paintPass();
+  }
+
+  /* ----------------------------------------------------------- design */
+  var SIZES = { background: [['background.png', 180, 220], ['background@2x.png', 360, 440], ['background@3x.png', 540, 660]],
+                banner: [['strip.png', 375, 98], ['strip@2x.png', 750, 196], ['strip@3x.png', 1125, 294]] };
+  function lum(hex) { var n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; }
+  function tone() { return lum(d.fg) > 0.5 ? 'light' : 'dark'; }
+  function setTone(t) {
+    if (t === 'light') { d.fg = '#ffffff'; d.label = mix(d.bg, '#ffffff', 0.78); }
+    else { d.fg = mix(d.bg, '#000000', 0.82); d.label = mix(d.bg, '#000000', 0.6); }
+  }
+  function mix(a, b, t) {
+    var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16), out = 0;
+    [16, 8, 0].forEach(function (sh) { out |= Math.round(((x >> sh) & 255) * (1 - t) + ((y >> sh) & 255) * t) << sh; });
+    return '#' + ('000000' + out.toString(16)).slice(-6);
+  }
+  // cut the chosen picture to one size ("cover": fill the box, keep the proportions; pos picks the part that shows)
+  function cut(w, h) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var sc = Math.max(w / src.width, h / src.height), sw = w / sc, sh = h / sc, p = Number($('#pos').value) / 100;
+    var g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+    g.drawImage(src, (src.width - sw) * (sw < src.width - 0.5 ? p : 0.5), (src.height - sh) * (sh < src.height - 0.5 ? p : 0.5), sw, sh, 0, 0, w, h);
+    return c;
+  }
+  function currentArtUrl() {
+    if (d.style === 'plain') return null;
+    if (src) { var s = SIZES[d.style][1]; return cut(s[1], s[2]).toDataURL('image/png'); }
+    return !newArt && info && info.design.style === d.style ? info.art : null;
+  }
+  function paintForm() {
+    Array.prototype.forEach.call(document.querySelectorAll('#styles label'), function (l) { var i = l.querySelector('input'); i.checked = i.value === d.style; l.classList.toggle('on', i.checked); });
+    $('#artField').hidden = d.style === 'plain';
+    $('#posField').hidden = !(src && d.style !== 'plain');
+    $('#titleField').hidden = d.style !== 'banner';
+    $('#title').checked = d.title !== false;
+    $('#bg').value = d.bg;
+    $('#bgLab').textContent = d.style === 'background' ? 'Color behind the picture' : 'Ticket color';
+    Array.prototype.forEach.call(document.querySelectorAll('#tone button'), function (b) { b.classList.toggle('on', b.getAttribute('data-t') === tone()); });
+    var url = currentArtUrl();
+    $('#thumb').style.backgroundImage = url ? 'url(' + url + ')' : '';
+    $('#pickBtn').textContent = url ? 'Choose another picture' : 'Choose a picture';
+    $('#artHint').textContent = d.style === 'banner' ? 'A wide picture works best (about 4 times as wide as it is tall). Export it from Canva as a PNG or JPG.'
+      : 'Export the art from Canva as a PNG or JPG, then choose it here or drag it in.';
+    $('#saveBtn').disabled = d.style !== 'plain' && !url;
+    paintPass(url);
+  }
+  function bars(el, text) {
+    var x = 0, out = '', seed = 7;
+    for (var i = 0; x < 190; i++) {
+      seed = (seed * 31 + text.charCodeAt(i % text.length) + i) % 9973;
+      var w = 1 + (seed % 4) * 0.9;
+      if (i % 2 === 0) out += '<rect x="' + x.toFixed(1) + '" y="0" width="' + w.toFixed(1) + '" height="52" fill="#111"/>';
+      x += w;
+    }
+    el.innerHTML = out;
+  }
+  function paintPass(url) {
+    if (!d || !info) return;
+    if (url === undefined) url = currentArtUrl();
+    var s = info.settings, p = $('#pass');
+    p.style.background = d.bg; p.style.color = d.fg;
+    $('#pBg').style.display = d.style === 'background' && url ? 'block' : 'none';
+    $('#pBg').style.backgroundImage = d.style === 'background' && url ? 'url(' + url + ')' : '';
+    var banner = d.style === 'banner' && url;
+    $('#pStrip').style.display = banner ? 'flex' : 'none';
+    $('#pStrip').style.backgroundImage = banner ? 'url(' + url + ')' : '';
+    $('#pPrim').style.display = banner ? 'none' : '';
+    $('#pPrim').textContent = s.name; $('#pPrim2').textContent = d.title !== false ? s.name : '';
+    $('#pOrg').textContent = s.org;
+    var sec = [];
+    if (s.tagline) sec.push([(s.taglineLabel || 'Theme').toUpperCase(), s.tagline]);
+    if (s.when) sec.push(['WHEN', s.when]);
+    $('#pSec').innerHTML = sec.map(function (f) { return '<div class="f"><small>' + esc(f[0]) + '</small><span>' + esc(f[1]) + '</span></div>'; }).join('');
+    Array.prototype.forEach.call(p.querySelectorAll('.f small'), function (e) { e.style.color = d.label; });
+    bars($('#pBars'), '818000');
+  }
+  function changed() { dirty = true; $('#saved').textContent = ''; paintForm(); }
+
+  $('#styles').onchange = function (e) {
+    if (e.target.name !== 'style') return;
+    d.style = e.target.value;
+    if (d.style === 'banner' && d.title === undefined) d.title = false;
+    changed();
+  };
+  $('#pickBtn').onclick = function () { $('#file').click(); };
+  function takeFile(f) {
+    if (!f || !/^image\//.test(f.type)) return;
+    var img = new Image(), u = URL.createObjectURL(f);
+    img.onload = function () {
+      URL.revokeObjectURL(u);
+      src = img; newArt = true; $('#pos').value = 50;
+      // colors that go with the picture: the average of its lower part, and whichever text reads on it
+      var c = document.createElement('canvas'); c.width = 24; c.height = 24;
+      var g = c.getContext('2d'); g.drawImage(img, 0, 0, 24, 24);
+      var px = g.getImageData(0, 12, 24, 12).data, r = 0, gg = 0, b = 0, n = px.length / 4;
+      for (var i = 0; i < px.length; i += 4) { r += px[i]; gg += px[i + 1]; b += px[i + 2]; }
+      d.bg = '#' + [r / n, gg / n, b / n].map(function (v) { return ('0' + Math.round(v).toString(16)).slice(-2); }).join('');
+      setTone(lum(d.bg) > 0.6 ? 'dark' : 'light');
+      if (d.style === 'plain') d.style = 'background';
+      changed();
+    };
+    img.onerror = function () { URL.revokeObjectURL(u); $('#artHint').textContent = "That file couldn't be opened as a picture. Try a PNG or JPG."; };
+    img.src = u;
+  }
+  $('#file').onchange = function () { takeFile(this.files[0]); this.value = ''; };
+  var drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { takeFile(e.dataTransfer.files[0]); });
+  $('#pos').oninput = function () { paintForm(); dirty = true; };
+  $('#title').onchange = function () { d.title = this.checked; changed(); };
+  $('#bg').oninput = function () { var t = tone(); d.bg = this.value; setTone(t); changed(); };
+  $('#tone').onclick = function (e) { var t = e.target.getAttribute('data-t'); if (t) { setTone(t); changed(); } };
+
+  $('#saveBtn').onclick = function () {
+    var b = this, body = { design: { style: d.style, bg: d.bg, fg: d.fg, label: d.label, title: d.title !== false } };
+    if (d.style !== 'plain' && src) {
+      body.art = {};
+      var total = 0;
+      SIZES[d.style].forEach(function (s) {
+        var data = cut(s[1], s[2]).toDataURL('image/png').split(',')[1];
+        if (total + data.length * 0.75 > 2.6 * 1024 * 1024 && /@3x/.test(s[0])) return;      // very detailed art: phones use the @2x picture
+        total += data.length * 0.75; body.art[s[0]] = data;
+      });
+    }
+    b.disabled = true; b.textContent = 'Saving…';
+    api('design', body, cur.ev).then(function (r) {
+      b.disabled = false; b.textContent = 'Save the design';
+      if (r.status === 401) return signedOut('Please sign in again.');
+      if (r.status !== 200) { $('#saved').style.color = '#a02222'; $('#saved').textContent = r.body.error === 'bad_design' && /large/.test(r.body.message || '') ? 'That picture is too large. Try a smaller export.' : "Couldn't save. Please try again."; return; }
+      dirty = false; newArt = false;
+      $('#saved').style.color = ''; $('#saved').textContent = 'Saved. Tickets opened from now on use this design.';
+      var keep = src; refreshAfterSave(keep);
+    }, function () { b.disabled = false; b.textContent = 'Save the design'; $('#saved').style.color = '#a02222'; $('#saved').textContent = 'No connection. Please try again.'; });
+  };
+  function refreshAfterSave(keep) {
+    api('event', undefined, cur.ev).then(function (r) { if (r.status === 200) { info = r.body; paintInfo(); src = keep; paintForm(); } });
+  }
+  window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  /* ------------------------------------------------------------- boot */
+  api('me').then(function (r) { if (r.status === 200) enter(r.body); else signedOut(''); });
+})();
+</script>
+</body>
+</html>

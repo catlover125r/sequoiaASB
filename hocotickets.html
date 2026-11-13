@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#4a0d67">
-<title>HOCO Check-in</title>
+<title>Check-in</title>
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
@@ -71,6 +71,17 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 #agreeBtn:active{transform:scale(.98)}
 #popQr{display:none;width:min(62vw,36vh,300px);height:min(62vw,36vh,300px);margin:16px auto 0;background:#fff;padding:10px;border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.25)}
 #pop.warn #popQr{display:block}
+#popQr2{display:none;width:min(62vw,36vh,300px);height:min(62vw,36vh,300px);margin:16px auto 0;background:#fff;padding:10px;border-radius:12px;box-shadow:0 2px 14px rgba(0,0,0,.25)}
+#popQr2 svg{display:block;width:100%;height:100%}
+#pop.warn #popQr2{display:block}
+
+/* ---- choose the event ---- */
+#pick{background:#17171b}
+#evlist{flex:1;overflow:auto;padding:14px 12px calc(14px + env(safe-area-inset-bottom))}
+.ev{display:block;width:100%;text-align:left;background:#26262d;border-radius:14px;padding:16px 18px;margin:0 0 10px}
+.ev:active{background:#33333c}
+.ev b{display:block;font-size:20px}
+.ev small{display:block;margin-top:3px;font-size:14px;opacity:.7}
 #pop .t{font-size:clamp(30px,8vw,56px);font-weight:700;line-height:1.2}
 #pop .t b{display:block;font-size:1.15em}
 #pop .guest{display:block;margin:22px auto 0;max-width:640px;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.7);border-radius:16px;padding:12px 18px 14px;font-size:clamp(20px,5vw,32px);font-weight:600;line-height:1.25}
@@ -110,15 +121,21 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
 
 <!-- sign in -->
 <div id="signin" class="view on">
-  <h2>HOCO Check-in</h2>
+  <h2>Check-in</h2>
   <p>Sequoia ASB staff only</p>
   <div id="gbtn"></div>
   <div id="signmsg"></div>
 </div>
 
+<!-- which event (only shown when this person works at more than one) -->
+<div id="pick" class="view">
+  <div class="bar"><h1>Choose the event</h1><button class="pill" id="out0">Sign out</button></div>
+  <div id="evlist"></div>
+</div>
+
 <!-- helper: scan + keypad -->
 <div id="helper" class="view">
-  <div class="bar"><h1 id="hwho">Check-in</h1><button class="pill" id="toAdmin" hidden>Admin view</button><button class="pill" id="out1">Sign out</button></div>
+  <div class="bar"><h1 id="hwho">Check-in</h1><button class="pill" id="swap1" hidden>Events</button><button class="pill" id="toAdmin" hidden>Admin view</button><button class="pill" id="out1">Sign out</button></div>
   <div class="scan">
     <video id="vid" playsinline muted autoplay></video>
     <div class="reticle"></div>
@@ -140,26 +157,31 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   <div id="dlg"><div class="box"><p id="dlgT"></p><div class="btns"><button id="dlgNo" class="pill">Cancel</button><button id="dlgYes" class="pill danger">Undo check-in</button></div></div></div>
 </div>
 
-<div id="pop"><div><div class="t" id="popT"></div><img id="popQr" src="/dance-agreement-qr.svg" alt="QR code for the Student Dance Agreement"><div class="s" id="popS"></div><button type="button" id="agreeBtn">Dance Agreement completed &mdash; Check in</button><button type="button" id="nplBtn">Admin approved &mdash; Check in anyway</button></div><div class="tap">Tap anywhere to continue</div></div>
+<div id="pop"><div><div class="t" id="popT"></div><img id="popQr" src="/dance-agreement-qr.svg" alt="QR code for the Student Dance Agreement"><div id="popQr2"></div><div class="s" id="popS"></div><button type="button" id="agreeBtn">Dance Agreement completed &mdash; Check in</button><button type="button" id="nplBtn">Admin approved &mdash; Check in anyway</button></div><div class="tap">Tap anywhere to continue</div></div>
 
 <script src="/vendor/zxing-reader.iife.js"></script>
+<script src="/vendor/qrcode.js"></script>
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
   var me = null, mode = null, busy = false;
+  // The event being worked on: {ev, role, name, greeting, agreementUrl}. null = the one sheet connected the old way
+  // (Ravenchella 2026), for accounts on the old allowlists.
+  var cur = null, myEvents = [], account = null;
 
   /* ------------------------------------------------------------ api */
   function api(action, body) {
     var opt = { credentials: 'same-origin', headers: { 'X-Requested-With': 'hoco', 'Content-Type': 'application/json' } };
     if (body !== undefined) { opt.method = 'POST'; opt.body = JSON.stringify(body); }
-    return fetch('/api/hoco/' + action, opt).then(function (r) {
+    var q = cur && ['config', 'login', 'logout', 'me'].indexOf(action) < 0 ? '?ev=' + encodeURIComponent(cur.ev) : '';
+    return fetch('/api/hoco/' + action + q, opt).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
     });
   }
 
   /* ----------------------------------------------------------- views */
   function show(id) {
-    ['signin', 'helper', 'admin'].forEach(function (v) { $('#' + v).classList.toggle('on', v === id); });
+    ['signin', 'pick', 'helper', 'admin'].forEach(function (v) { $('#' + v).classList.toggle('on', v === id); });
   }
   function setMode(m) {
     mode = m;
@@ -167,23 +189,51 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
     if (m === 'admin') { stopCam(); show('admin'); loadTickets(); setTimeout(function () { $('#q').focus(); }, 50); }
     else { show('helper'); startCam(); }
   }
-  function enter(user) {
-    me = user;
-    $('#hwho').textContent = user.email;
-    $('#toAdmin').hidden = user.role !== 'admin';
+  // After sign-in: go straight to the event if there is only one, otherwise ask which.
+  function enter(who) {
+    account = who; myEvents = who.events || [];
     var saved = null;
-    try { saved = sessionStorage.getItem('hocoMode'); } catch (e) {}
-    setMode(user.role === 'admin' && saved !== 'helper' ? 'admin' : 'helper');
+    try { saved = sessionStorage.getItem('hocoEvent'); } catch (e) {}
+    var again = myEvents.filter(function (e) { return e.ev === saved; })[0];
+    if (again) return openEvent(again);
+    if (myEvents.length === 1) return openEvent(myEvents[0]);
+    if (!myEvents.length) return openEvent(null);
+    pickEvent();
+  }
+  function pickEvent() {
+    me = null; stopCam(); clearTimeout(timer);
+    $('#evlist').innerHTML = myEvents.map(function (e, i) {
+      return '<button class="ev" data-i="' + i + '"><b>' + esc(e.name) + '</b><small>' + esc([e.when, e.place].filter(Boolean).join(' \u00b7 ') || 'No date set') + '</small></button>';
+    }).join('');
+    show('pick');
+  }
+  $('#evlist').onclick = function (e) {
+    var b = e.target.closest ? e.target.closest('.ev') : null;
+    if (b) openEvent(myEvents[Number(b.getAttribute('data-i'))]);
+  };
+  function openEvent(e) {
+    cur = e;
+    try { if (e) sessionStorage.setItem('hocoEvent', e.ev); else sessionStorage.removeItem('hocoEvent'); } catch (x) {}
+    me = { email: account.email, role: e ? e.role : account.role };
+    tickets = []; loadedOnce = false; pending = null; lookups = {}; held = null; heldInfo = null;
+    document.title = (e ? e.name + ' ' : '') + 'Check-in';
+    $('#hwho').textContent = e ? e.name : account.email;
+    $('#toAdmin').hidden = me.role !== 'admin';
+    $('#swap1').hidden = myEvents.length < 2;
+    var saved = null;
+    try { saved = sessionStorage.getItem('hocoMode'); } catch (x) {}
+    setMode(me.role === 'admin' && saved !== 'helper' ? 'admin' : 'helper');
   }
   function signedOut(msg) {
-    me = null; stopCam(); show('signin');
+    me = null; cur = null; account = null; stopCam(); show('signin');
     $('#signmsg').textContent = msg || '';
     initGoogle();
   }
   function signOut() {
-    api('logout', {}).then(function () { try { sessionStorage.removeItem('hocoMode'); } catch (e) {} signedOut(''); });
+    api('logout', {}).then(function () { try { sessionStorage.removeItem('hocoMode'); sessionStorage.removeItem('hocoEvent'); } catch (e) {} signedOut(''); });
   }
-  $('#out1').onclick = signOut; $('#out2').onclick = signOut;
+  $('#out0').onclick = signOut; $('#out1').onclick = signOut; $('#out2').onclick = signOut;
+  $('#swap1').onclick = function () { try { sessionStorage.removeItem('hocoEvent'); } catch (e) {} pickEvent(); };
   $('#toAdmin').onclick = function () { setMode('admin'); };
   $('#toHelper').onclick = function () { setMode('helper'); };
 
@@ -246,6 +296,18 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
   function nameCase(s) { return String(s).trim().replace(/(^|[\s-])([a-z])/g, function (m, a, c) { return a + c.toUpperCase(); }); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
+  // The QR code on the yellow screen: the event's own dance agreement form (Settings tab of its sheet).
+  // The picture file is only for the old Ravenchella setup.
+  var qrFor = null;
+  function agreementQr() {
+    var img = $('#popQr'), box = $('#popQr2'), url = cur ? cur.agreementUrl : null;
+    img.style.display = cur ? 'none' : '';
+    box.style.display = cur && url ? '' : 'none';
+    if (!cur || !url || qrFor === url) return;
+    try { var q = qrcode(0, 'M'); q.addData(url); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); qrFor = url; }
+    catch (e) { box.style.display = 'none'; }
+  }
+
   var heldFor = null;     // the student ID shown on the yellow "agreement needed" / red "NPL" screen
   var conf = {};          // what the helper has confirmed for the student being checked in: { id, agreement, npl }
   function checkIn(raw, add) {
@@ -264,10 +326,10 @@ button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulat
       if (b.result === 'ok') {
         // students who bought a guest ticket: the helper needs to see the guest is with them, and who it is
         var guest = b.guest ? '<span class="guest"><small>Has a guest</small><b>' + esc(nameCase(b.guest)) + '</b></span>' : '';
-        pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, have a great hoco.' + guest); clearKeys();
+        pop('ok', '', '', '<b>' + esc(b.name) + '</b> is checked in, ' + esc(String(cur ? (cur.greeting || 'have a great night') : 'have a great hoco').replace(/[.!\s]+$/, '')) + '.' + guest); clearKeys();
       }
       else if (b.result === 'npl') { heldFor = lastId; pop('npl', '', "Get an admin's OK before checking this student in.", 'NPL &mdash; not allowed in<div class="nm">' + esc(b.name || '') + '</div>'); }
-      else if (b.result === 'no_agreement') { heldFor = lastId; pop('warn', '', 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Not checked in yet</div>'); }
+      else if (b.result === 'no_agreement') { heldFor = lastId; agreementQr(); pop('warn', '', cur && !cur.agreementUrl ? 'They need to fill out the dance agreement before they can come in.' : 'Scan the code to fill out the agreement, then scan the ticket again.', 'Dance Agreement needed<div class="nm">' + esc(b.name || '') + '</div><div class="nm" style="font-weight:600">Not checked in yet</div>'); }
       else if (b.result === 'already') pop('bad', 'Already checked in', b.name || '');
       else if (b.result === 'no_ticket') pop('bad', 'No ticket', '');
       else pop('bad', 'Something went wrong', 'Reload this page and try again.');   // a result this (older) page does not know
